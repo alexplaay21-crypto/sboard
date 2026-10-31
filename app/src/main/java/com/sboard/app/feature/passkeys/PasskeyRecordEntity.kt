@@ -7,6 +7,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
+import androidx.room.Transaction
 
 /**
  * Private key is AES-GCM ciphertext wrapped with the unlocked Vault Key. In schema v5, rpId
