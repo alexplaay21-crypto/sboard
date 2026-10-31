@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">sBoard</string>
+    <string name="ime_name">sBoard Keyboard</string>
+    <string name="ime_subtype_ru">Russian</string>
+    <string name="ime_subtype_en">English</string>
+    <string name="ime_private_input">sBoard • private input</string>
+    <string name="autofill_service_name">sBoard Autofill</string>
+</resources>
