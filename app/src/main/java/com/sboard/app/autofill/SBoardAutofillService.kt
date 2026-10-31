@@ -139,7 +139,7 @@ class SBoardAutofillService : AutofillService() {
         val otp = mutableListOf<AutofillId>()
         fun visit(node: AssistStructure.ViewNode) {
             val id = node.autofillId
-            if (id != null && node.isVisibleToUser && node.autofillType == View.AUTOFILL_TYPE_TEXT) {
+            if (id != null && node.visibility == View.VISIBLE && node.autofillType == View.AUTOFILL_TYPE_TEXT) {
                 val hints = node.autofillHints.orEmpty().map { it.lowercase() }
                 val hint = node.hint?.toString()?.lowercase().orEmpty()
                 val resourceId = node.idEntry?.lowercase().orEmpty()
