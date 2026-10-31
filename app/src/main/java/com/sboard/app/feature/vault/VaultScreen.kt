@@ -312,6 +312,10 @@ private fun VaultUnlockedScreen(
         try { pendingSyncReviews = syncInboxManager.pendingReviews() }
         catch (e: Exception) { error = e.message ?: tr("Не удалось загрузить изменения синхронизации") }
     }
+    suspend fun refresh() {
+        try { records = repository.getAll(); error = null }
+        catch (e: Exception) { error = "${tr("Не удалось открыть хранилище")}: ${e.localizedMessage ?: tr("ошибка данных")}" }
+    }
     LaunchedEffect(syncInboxManager) {
         // Safe automatic convergence: only previously absent record IDs are accepted.
         // Existing local records remain visible in the manual review panel.
@@ -320,10 +324,6 @@ private fun VaultUnlockedScreen(
         refresh()
     }
 
-    suspend fun refresh() {
-        try { records = repository.getAll(); error = null }
-        catch (e: Exception) { error = "${tr("Не удалось открыть хранилище")}: ${e.localizedMessage ?: tr("ошибка данных")}" }
-    }
     LaunchedEffect(repository) { refresh() }
 
     val filtered = records.filter {
