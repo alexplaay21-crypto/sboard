@@ -9,7 +9,7 @@ import android.os.Build
  * Browser-delegated origins require an explicit privileged-caller allowlist; direct Android
  * callers additionally require a matching Digital Asset Links statement on the RP domain.
  */
-internal class CallingAppOriginResolver(
+class CallingAppOriginResolver(
     private val assetLinksVerifier: DigitalAssetLinksVerifier = DigitalAssetLinksVerifier()
 ) {
     suspend fun resolveVerified(callingAppInfo: CallingAppInfo, rpId: String): String {
