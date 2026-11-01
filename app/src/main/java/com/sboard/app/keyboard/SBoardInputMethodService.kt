@@ -116,8 +116,8 @@ class SBoardInputMethodService : InputMethodService() {
                 Layout.SYMBOLS -> if (symbolPage) Layout.SYMBOLS else Layout.RU
             }
             if (layout != Layout.SYMBOLS) {
-                getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-                    .putString(KEY_LAYOUT, if (layout == Layout.EN) "en" else "ru").apply()
+                KeyboardSettings.preferences(this).edit()
+                    .putString(KeyboardSettings.KEY_LAYOUT, if (layout == Layout.EN) "en" else "ru").apply()
             }
             shifted = false
             renderKeyboard()
