@@ -299,6 +299,13 @@ private fun KeyboardScreen() {
     var haptics by rememberSaveable { mutableStateOf(keyboardPrefs.getBoolean(KeyboardSettings.KEY_HAPTICS, true)) }
     var numberRow by rememberSaveable { mutableStateOf(keyboardPrefs.getBoolean(KeyboardSettings.KEY_NUMBER_ROW, true)) }
     var theme by rememberSaveable { mutableStateOf(keyboardPrefs.getString(KeyboardSettings.KEY_THEME, "system") ?: "system") }
+    var allowNetworkSpeech by rememberSaveable { mutableStateOf(keyboardPrefs.getBoolean(KeyboardSettings.KEY_NETWORK_SPEECH, false)) }
+    var microphoneGranted by rememberSaveable {
+        mutableStateOf(context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED)
+    }
+    val microphonePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        microphoneGranted = granted
+    }
     ScreenColumn {
         Header(tr("Клавиатура"), tr("Настройте ввод и внешний вид sBoard"))
         Panel {
@@ -322,6 +329,20 @@ private fun KeyboardScreen() {
             Text(tr("Ввод текста"), color = Cream, fontWeight = FontWeight.SemiBold)
             SettingSwitch(tr("Числовой ряд"), numberRow) { numberRow = it; keyboardPrefs.edit().putBoolean(KeyboardSettings.KEY_NUMBER_ROW, it).apply() }
             SettingSwitch(tr("Вибрация клавиш"), haptics) { haptics = it; keyboardPrefs.edit().putBoolean(KeyboardSettings.KEY_HAPTICS, it).apply() }
+        }
+        Panel {
+            Text(tr("Голосовой ввод"), color = Cream, fontWeight = FontWeight.SemiBold)
+            Text(tr("Распознавание выполняется Android. sBoard не сохраняет аудио. По возможности используется офлайн-распознавание."), color = Muted, fontSize = 12.sp)
+            OutlinedButton(
+                onClick = { microphonePermission.launch(android.Manifest.permission.RECORD_AUDIO) },
+                enabled = !microphoneGranted,
+                modifier = Modifier.fillMaxWidth()
+            ) { Text(if (microphoneGranted) tr("Микрофон разрешён") else tr("Разрешить микрофон")) }
+            SettingSwitch(tr("Разрешить системное сетевое распознавание"), allowNetworkSpeech) {
+                allowNetworkSpeech = it
+                keyboardPrefs.edit().putBoolean(KeyboardSettings.KEY_NETWORK_SPEECH, it).apply()
+            }
+            Text(tr("Если офлайн-распознавание недоступно, системный распознаватель может отправлять речь своему поставщику. Ввод запускается только нажатием на микрофон."), color = Muted, fontSize = 11.sp)
         }
         Panel {
             Text(tr("Внешний вид"), color = Cream, fontWeight = FontWeight.SemiBold)
@@ -569,6 +590,16 @@ private fun ProfileScreen(session: VaultSession, openRestoreInitially: Boolean =
     }
 }
 
+
+private fun googleAuthorizationFailure(error: Exception): String {
+    val apiError = error as? com.google.android.gms.common.api.ApiException
+    return when (apiError?.statusCode) {
+        com.google.android.gms.common.api.CommonStatusCodes.DEVELOPER_ERROR ->
+            tr("Google OAuth отклонил приложение: проверьте Android OAuth-клиент, package name и SHA-1 сертификата установленного APK.")
+        else -> error.message?.take(280) ?: tr("Не удалось авторизовать Google Drive")
+    }
+}
+
 @Composable
 private fun BackupSettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
@@ -587,8 +618,38 @@ private fun BackupSettingsScreen(onBack: () -> Unit) {
     var statusMessage by remember { mutableStateOf<String?>(null) }
     var statusError by remember { mutableStateOf(false) }
     val backupStatusStore = remember(context) { BackupAutomationStatusStore(context) }
+    val driveClient = remember { GoogleDriveBackupClient() }
     var backupStatus by remember { mutableStateOf(backupStatusStore.snapshot()) }
     fun refreshBackupStatus() { backupStatus = backupStatusStore.snapshot() }
+    fun verifyAndConnectDrive(accessToken: String?) {
+        if (accessToken.isNullOrBlank()) {
+            driveConnected = false
+            statusMessage = tr("Google не выдал access token")
+            statusError = true
+            return
+        }
+        statusMessage = tr("Проверяем доступ к Google Drive…")
+        statusError = false
+        scope.launch {
+            try {
+                driveClient.listVersions(accessToken)
+                driveConnected = true
+                settings.setDriveConnected(true)
+                if (automationDesired && credentialConfigured) {
+                    scheduler.enableChangeBased()
+                    scheduler.requestAfterImportantChange()
+                }
+                statusMessage = tr("Google Drive подключён. Токен не сохраняется в sBoard.")
+                statusError = false
+            } catch (failure: Exception) {
+                driveConnected = false
+                settings.setDriveConnected(false)
+                scheduler.disable()
+                statusMessage = failure.message ?: tr("Авторизация Google завершилась, но Drive API не подтвердил доступ. Проверьте, что Google Drive API включён и вы разрешили доступ.")
+                statusError = true
+            }
+        }
+    }
     val hostActivity = context as? Activity
     val driveOAuthLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult()
@@ -597,21 +658,11 @@ private fun BackupSettingsScreen(onBack: () -> Unit) {
             runCatching {
                 Identity.getAuthorizationClient(context).getAuthorizationResultFromIntent(result.data)
             }.onSuccess { authorizationResult ->
-                val granted = authorizationResult.grantedScopes.orEmpty()
-                driveConnected = !authorizationResult.accessToken.isNullOrBlank() &&
-                    granted.contains("https://www.googleapis.com/auth/drive.appdata")
-                settings.setDriveConnected(driveConnected)
-                if (driveConnected && automationDesired && credentialConfigured) {
-                    scheduler.enableChangeBased()
-                    scheduler.requestAfterImportantChange()
-                }
-                statusMessage = if (driveConnected) tr("Google Drive подключён. Токен не сохраняется в sBoard.")
-                    else tr("Google не подтвердил доступ к папке приложения Drive")
-                statusError = !driveConnected
+                verifyAndConnectDrive(authorizationResult.accessToken)
             }.onFailure { error ->
                 driveConnected = false
                 settings.setDriveConnected(false)
-                statusMessage = error.message ?: tr("Не удалось завершить подключение Google Drive")
+                statusMessage = googleAuthorizationFailure(error)
                 statusError = true
             }
         } else {
@@ -662,20 +713,11 @@ private fun BackupSettingsScreen(onBack: () -> Unit) {
                                             IntentSenderRequest.Builder(pendingIntent.intentSender).build()
                                         )
                                     } else {
-                                        driveConnected = !authorizationResult.accessToken.isNullOrBlank() &&
-                                            authorizationResult.grantedScopes.orEmpty().contains("https://www.googleapis.com/auth/drive.appdata")
-                                        settings.setDriveConnected(driveConnected)
-                                        if (driveConnected && automationDesired && credentialConfigured) {
-                                            scheduler.enableChangeBased()
-                                            scheduler.requestAfterImportantChange()
-                                        }
-                                        statusMessage = if (driveConnected) tr("Google Drive подключён. Токен не сохраняется в sBoard.")
-                                            else tr("Google не подтвердил доступ к папке приложения Drive")
-                                        statusError = !driveConnected
+                                        verifyAndConnectDrive(authorizationResult.accessToken)
                                     }
                                 }
                                 .addOnFailureListener { error ->
-                                    statusMessage = error.message ?: tr("Не удалось авторизовать Google Drive")
+                                    statusMessage = googleAuthorizationFailure(error)
                                     statusError = true
                                 }
                         }

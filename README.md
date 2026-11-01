@@ -5,7 +5,7 @@
 ## Что уже есть
 
 - Одно Android-приложение с разделами главного экрана, клавиатуры, хранилища, инструментов и профиля.
-- Системная экранная клавиатура с базовым вводом на русском и английском, переключением раскладки, символами и числовым вводом. Числовой ряд, вибрация и светлая/тёмная тема клавиатуры настраиваются в приложении.
+- Системная клавиатура с русским и английским вводом, символами, цифрами, эмодзи, вставкой из буфера обмена, округлыми клавишами, темами и вибрацией. Голосовой ввод использует Android SpeechRecognizer: офлайн на поддерживаемых устройствах, сетевой системный распознаватель — только после отдельного согласия.
 - Локальное хранилище с зашифрованными записями, мастер-паролем, биометрической разблокировкой и Recovery Key.
 - Служба Autofill для поддерживаемых учётных записей, генератор паролей, TOTP и зашифрованное резервирование через Google Drive.
 - Локализованный интерфейс RU/EN.
@@ -33,7 +33,7 @@ APK для отладки появится в `app/build/outputs/apk/debug/`. Н
 ### Implemented foundations
 
 - One Android app with Home, Keyboard, Vault, Tools, and Profile sections.
-- A system keyboard with basic Russian and English input, layout switching, symbols, and numeric input. The number row, key vibration, and light/dark keyboard theme are configurable in the app.
+- A system keyboard with Russian and English input, symbols, digits, emoji, clipboard paste, rounded keys, themes, and haptics. Voice typing uses Android SpeechRecognizer: on-device where available; network-backed system recognition requires separate consent.
 - A local vault with encrypted records, a master password, biometric unlock, and a Recovery Key.
 - An Autofill service for supported credentials, a password generator, TOTP, and encrypted Google Drive backups.
 - Russian and English app localization.

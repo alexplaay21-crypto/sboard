@@ -19,7 +19,7 @@ Google рекомендует запрашивать Drive-разрешения 
 3. Настройте OAuth consent screen / Branding.
 4. Создайте OAuth client типа **Android**.
 5. Укажите package name: `com.sboard.app`.
-6. Укажите SHA-1 сертификата подписи. Для локальной отладки это debug keystore; для release — сертификат release/Play App Signing.
+6. Укажите SHA-1 сертификата подписи установленного APK. Получить его локально можно командой `./gradlew signingReport`; Android OAuth-клиент проверяет одновременно package name и SHA-1. После изменения сертификата клиента установите APK, подписанный тем же ключом.
 7. Убедитесь, что тестовый Google-аккаунт добавлен в Test users, если consent screen находится в режиме Testing.
 8. Установите приложение на Android-устройство с Google Play services и войдите в нужный Google-аккаунт.
 
@@ -46,7 +46,7 @@ Google рекомендует запрашивать Drive-разрешения 
 
 ## Сборка
 
-Зависимость `com.google.android.gms:play-services-auth:21.5.0` уже добавлена в `app/build.gradle.kts`. Для сборки нужен Android SDK 36, JDK 17 и Gradle Sync.
+Зависимость Google Play Services Auth 22.0.0 уже добавлена в `app/build.gradle.kts`. Для сборки нужен Android SDK 36, JDK 17 и Gradle Sync. Debug APK из GitHub Actions подписывается временным runner debug-ключом: его SHA-1 меняется между сборками, поэтому для постоянной OAuth-настройки нужно подписывать APK постоянным ключом, хранящимся локально или в защищённых GitHub Actions secrets (не в репозитории).
 
 ## Event-triggered background backup (new development stage)
 

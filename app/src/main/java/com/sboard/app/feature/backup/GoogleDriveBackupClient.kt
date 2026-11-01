@@ -95,7 +95,7 @@ class GoogleDriveBackupClient(
                 .header("Authorization", "Bearer $accessToken").get().build()
             val next: String?
             http.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) throw driveError(tr("Не удалось получить историю резервных копий"), response.code)
+                if (!response.isSuccessful) throw driveError(tr("Не удалось получить историю резервных копий"), response.code, response.body?.string())
                 val json = JSONObject(response.body?.string().orEmpty())
                 val files = json.optJSONArray("files")
                 if (files != null) for (index in 0 until files.length()) {
@@ -143,7 +143,7 @@ class GoogleDriveBackupClient(
             .build()
         http.newCall(request).execute().use { response ->
             if (response.code != 204 && !response.isSuccessful) {
-                throw driveError(tr("Не удалось удалить резервную копию"), response.code)
+                throw driveError(tr("Не удалось удалить резервную копию"), response.code, response.body?.string())
             }
         }
         val remaining = listVersions(accessToken)
@@ -180,7 +180,7 @@ class GoogleDriveBackupClient(
                 .build()
 
             http.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) throw driveError(tr("Не удалось скачать резервную копию"), response.code)
+                if (!response.isSuccessful) throw driveError(tr("Не удалось скачать резервную копию"), response.code, response.body?.string())
                 val body = response.body ?: throw IOException(tr("Google Drive вернул пустой файл"))
                 destination.parentFile?.let { check(it.exists() || it.mkdirs()) }
                 val temp = File(destination.parentFile ?: destination.absoluteFile.parentFile, destination.name + ".download.tmp")
@@ -254,7 +254,7 @@ class GoogleDriveBackupClient(
             .get()
             .build()
         http.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw driveError(tr("Не удалось найти резервную копию в Google Drive"), response.code)
+            if (!response.isSuccessful) throw driveError(tr("Не удалось найти резервную копию в Google Drive"), response.code, response.body?.string())
             val json = JSONObject(response.body?.string().orEmpty())
             val files = json.optJSONArray("files") ?: return null
             if (files.length() == 0) return null
@@ -297,7 +297,7 @@ class GoogleDriveBackupClient(
             .build()
 
         http.newCall(request).execute().use { response ->
-            if (response.code !in 200..299) throw driveError(tr("Не удалось начать загрузку в Google Drive"), response.code)
+            if (response.code !in 200..299) throw driveError(tr("Не удалось начать загрузку в Google Drive"), response.code, response.body?.string())
             return response.header("Location") ?: throw IOException(tr("Google Drive не вернул адрес загрузки"))
         }
     }
@@ -346,7 +346,7 @@ class GoogleDriveBackupClient(
                                 last + 1L
                             }
                         }
-                        else -> throw driveError(tr("Не удалось загрузить резервную копию в Google Drive"), it.code)
+                        else -> throw driveError(tr("Не удалось загрузить резервную копию в Google Drive"), it.code, it.body?.string())
                     }
                 }
             }
@@ -367,8 +367,19 @@ class GoogleDriveBackupClient(
         }
     }
 
-    private fun driveError(message: String, status: Int): Exception {
-        val details = "$message (HTTP $status). Проверьте Google-аккаунт, разрешение drive.appdata и подключение к сети."
+    private fun driveError(message: String, status: Int, responseBody: String? = null): Exception {
+        val errorObject = runCatching {
+            JSONObject(responseBody.orEmpty()).optJSONObject("error")
+        }.getOrNull()
+        val reason = errorObject?.optJSONArray("errors")?.optJSONObject(0)?.optString("reason")
+            ?.ifBlank { null } ?: errorObject?.optString("status")?.ifBlank { null }
+        val apiMessage = errorObject?.optString("message")?.trim()?.take(240)?.ifBlank { null }
+        val diagnostic = when (reason) {
+            "accessNotConfigured", "SERVICE_DISABLED" -> tr("Google Drive API выключен в проекте Google Cloud. Включите Drive API и повторите подключение.")
+            "insufficientPermissions" -> tr("Google не выдал доступ к папке приложения. Отключите и подключите Google Drive заново, подтвердив разрешение.")
+            else -> apiMessage?.let { " $it" }.orEmpty()
+        }
+        val details = "$message (HTTP $status${reason?.let { ", $it"}.orEmpty()}).$diagnostic"
         return if (status == 401 || status == 403) SecurityException(details) else IOException(details)
     }
 
