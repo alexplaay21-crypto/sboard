@@ -48,7 +48,7 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
 
     private val appContext by context.appContext()
 
-    private val wordData = guardedByLock { mutableMapOf<String, Int>() }
+    private val wordData = guardedByLock { mutableMapOf<String, Map<String, Int>>() }
     private val wordDataSerializer = MapSerializer(String.serializer(), Int.serializer())
 
     override val providerId = ProviderId
@@ -74,12 +74,22 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
         // The subtype we get here contains a lot of data, however we are only interested in subtype.primaryLocale and
         // subtype.secondaryLocales.
 
-        wordData.withLock { wordData ->
-            if (wordData.isEmpty()) {
-                // The bundled frequency dictionary is an English baseline and remains on-device.
-                val rawData = appContext.assets.readText("ime/dict/data.json")
-                val jsonData = Json.decodeFromString(wordDataSerializer, rawData)
-                wordData.putAll(jsonData)
+        val language = subtype.primaryLocale.language
+        if (language != "en" && language != "ru") return@withContext
+        wordData.withLock { dictionaries ->
+            if (language !in dictionaries) {
+                dictionaries[language] = when (language) {
+                    "en" -> {
+                        // The upstream English frequency dictionary remains on-device.
+                        val rawData = appContext.assets.readText("ime/dict/data.json")
+                        Json.decodeFromString(wordDataSerializer, rawData)
+                    }
+                    "ru" -> {
+                        // This ranked 10k list is licensed under CC BY 2.5; see THIRD_PARTY_NOTICES.
+                        RankedWordList.parse(appContext.assets.readText("ime/dict/russian_10000.txt"))
+                    }
+                    else -> emptyMap()
+                }
             }
         }
     }
@@ -93,12 +103,15 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
         allowPossiblyOffensive: Boolean,
         isPrivateSession: Boolean,
     ): SpellingResult {
-        if (subtype.primaryLocale.language != "en") return SpellingResult.unspecified()
+        if (isPrivateSession) return SpellingResult.unspecified()
+        val language = subtype.primaryLocale.language
+        if (language != "en" && language != "ru") return SpellingResult.unspecified()
         val normalized = word.lowercase(Locale.ROOT)
         if (normalized.isBlank() || normalized.any { !it.isLetter() && it != '\'' && it != '’' }) {
             return SpellingResult.unspecified()
         }
-        return wordData.withLock { dictionary ->
+        return wordData.withLock { dictionaries ->
+            val dictionary = dictionaries[language] ?: return@withLock SpellingResult.unspecified()
             if (!allowPossiblyOffensive && normalized in BLOCKED_WORDS) return@withLock SpellingResult.unspecified()
             if (normalized in dictionary) return@withLock SpellingResult.validWord()
             val corrections = LatinWordEngine.correct(normalized, dictionary, maxSuggestionCount)
@@ -117,17 +130,21 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
         allowPossiblyOffensive: Boolean,
         isPrivateSession: Boolean,
     ): List<SuggestionCandidate> {
-        if (subtype.primaryLocale.language != "en") return emptyList()
+        if (isPrivateSession) return emptyList()
+        val language = subtype.primaryLocale.language
+        if (language != "en" && language != "ru") return emptyList()
         val originalQuery = content.currentWordText.ifBlank { content.composingText }
         val query = originalQuery.lowercase(Locale.ROOT)
         if (query.isBlank()) return emptyList()
-        return wordData.withLock { dictionary ->
+        return wordData.withLock { dictionaries ->
+            val dictionary = dictionaries[language] ?: return@withLock emptyList()
+            val maxFrequency = if (language == "ru") 10_000 else 255
             LatinWordEngine.suggest(query, dictionary, maxCandidateCount)
                 .filter { allowPossiblyOffensive || it.word !in BLOCKED_WORDS }
                 .map { match ->
                     WordSuggestionCandidate(
                         text = LatinWordEngine.preserveCase(originalQuery, match.word),
-                        confidence = (match.frequency.coerceIn(0, 255) / 255.0).coerceIn(0.0, 1.0),
+                        confidence = (match.frequency.toDouble() / maxFrequency.toDouble()).coerceIn(0.0, 1.0),
                         isEligibleForAutoCommit = false,
                         sourceProvider = this,
                     )
@@ -150,11 +167,16 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
     }
 
     override suspend fun getListOfWords(subtype: Subtype): List<String> {
-        return wordData.withLock { it.keys.toList() }
+        return wordData.withLock { it[subtype.primaryLocale.language]?.keys?.toList().orEmpty() }
     }
 
     override suspend fun getFrequencyForWord(subtype: Subtype, word: String): Double {
-        return wordData.withLock { it.getOrDefault(word.lowercase(Locale.ROOT), 0) / 255.0 }
+        return wordData.withLock {
+            val language = subtype.primaryLocale.language
+            val dictionary = it[language] ?: return@withLock 0.0
+            val maxFrequency = if (language == "ru") 10_000 else 255
+            dictionary[word.lowercase(Locale.ROOT)]?.toDouble()?.div(maxFrequency.toDouble()) ?: 0.0
+        }
     }
 
     override suspend fun destroy() {

@@ -1,0 +1,6 @@
+{
+  "hash": "russian-words-cc-by-2.5",
+  "name": "Russian word list (CC BY 2.5)",
+  "url": "https://github.com/hingston/russian/blob/b144235f90fc720ef310f304e31acc3825d62a1b/LICENSE.md",
+  "content": "Data files are derived from the University of Leeds Corpus (http://corpus.leeds.ac.uk/frqc/internet-ru.num) and distributed under the Creative Commons Attribution 2.5 license (https://creativecommons.org/licenses/by/2.5/). Corpus editing and cleanup by hingston. sBoard includes the first 10,000 ranked Cyrillic-only entries, filters to alphabetic words of 2–40 letters, and assigns rank-derived scores. Source: https://github.com/hingston/russian/tree/b144235f90fc720ef310f304e31acc3825d62a1b"
+}
