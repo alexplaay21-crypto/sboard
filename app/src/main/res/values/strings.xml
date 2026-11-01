@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">sBoard</string>
-    <string name="ime_name">sBoard Keyboard</string>
+    <string name="ime_name">sBoard (резервная)</string>
     <string name="ime_subtype_ru">Русский</string>
     <string name="ime_subtype_en">English</string>
     <string name="ime_private_input">sBoard • приватный ввод</string>
@@ -15,6 +15,8 @@
     <string name="ime_no_speech_result">Речь не распознана</string>
     <string name="autofill_service_name">sBoard Autofill</string>
     <string name="ime_paste_from_clipboard">Вставить текст из буфера обмена</string>
+    <string name="ime_backspace">Удалить символ</string>
+    <string name="sboard_floris_ime_name">Клавиатура sBoard</string>
     <string name="ime_symbols">Символы</string>
     <string name="ime_emoji">Эмодзи</string>
     <string name="ime_hide_keyboard">Скрыть клавиатуру</string>

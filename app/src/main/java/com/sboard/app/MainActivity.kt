@@ -327,9 +327,24 @@ private fun KeyboardScreen() {
                 },
                 modifier = Modifier.fillMaxWidth()
             ) { Text(tr("Выбрать клавиатуру sBoard")) }
+            OutlinedButton(
+                onClick = {
+                    val settingsIntent = android.content.Intent(
+                        context,
+                        dev.patrickgold.florisboard.app.FlorisAppActivity::class.java,
+                    ).apply {
+                        action = android.content.Intent.ACTION_VIEW
+                        data = android.net.Uri.parse("ui://florisboard/settings/keyboard")
+                        addCategory(android.content.Intent.CATEGORY_BROWSABLE)
+                    }
+                    context.startActivity(settingsIntent)
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text(tr("Дополнительные настройки клавиатуры")) }
         }
         Panel {
-            Text(tr("Ввод текста"), color = Cream, fontWeight = FontWeight.SemiBold)
+            Text(tr("Настройки резервной клавиатуры"), color = Cream, fontWeight = FontWeight.SemiBold)
+            Text(tr("Эти параметры относятся только к резервной клавиатуре. Интегрированную клавиатуру настраивайте в дополнительных настройках выше."), color = Muted, fontSize = 12.sp)
             SettingSwitch(tr("Числовой ряд"), numberRow) { numberRow = it; keyboardPrefs.edit().putBoolean(KeyboardSettings.KEY_NUMBER_ROW, it).apply() }
             Text("${tr("Высота клавиш")}: ${keyHeight.toInt()} dp", color = Muted, fontSize = 12.sp)
             Slider(value = keyHeight, onValueChange = { keyHeight = it }, onValueChangeFinished = {
@@ -370,7 +385,7 @@ private fun KeyboardScreen() {
 @Composable
 private fun KeyboardPreview() {
     Panel {
-        Text(tr("Предпросмотр"), color = Muted, fontSize = 12.sp)
+        Text(tr("Предпросмотр резервной клавиатуры"), color = Muted, fontSize = 12.sp)
         Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
             val keyboardRows = if (SBoardI18n.isEnglish()) {
                 listOf("Q W E R T Y U I O P", "A S D F G H J K L", "⇧ Z X C V B N M ⌫")
@@ -607,6 +622,10 @@ private fun googleAuthorizationFailure(error: Throwable): String {
     }
 }
 
+private fun isGoogleAuthorizationCancellation(error: Throwable): Boolean =
+    (error as? com.google.android.gms.common.api.ApiException)?.statusCode ==
+        com.google.android.gms.common.api.CommonStatusCodes.CANCELED
+
 @Composable
 private fun BackupSettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
@@ -674,12 +693,13 @@ private fun BackupSettingsScreen(onBack: () -> Unit) {
             }.onFailure { error ->
                 driveConnected = false
                 settings.setDriveConnected(false)
-                statusMessage = googleAuthorizationFailure(error)
-                statusError = true
+                val cancelled = isGoogleAuthorizationCancellation(error)
+                statusMessage = if (cancelled) tr("Подключение Google Drive отменено") else googleAuthorizationFailure(error)
+                statusError = !cancelled
             }
         } else {
             statusMessage = tr("Подключение Google Drive отменено")
-            statusError = true
+            statusError = false
         }
     }
 
@@ -752,8 +772,9 @@ private fun BackupSettingsScreen(onBack: () -> Unit) {
                                     }
                                 }
                                 .addOnFailureListener { error ->
-                                    statusMessage = googleAuthorizationFailure(error)
-                                    statusError = true
+                                    val cancelled = isGoogleAuthorizationCancellation(error)
+                                    statusMessage = if (cancelled) tr("Подключение Google Drive отменено") else googleAuthorizationFailure(error)
+                                    statusError = !cancelled
                                 }
                         }
                     },

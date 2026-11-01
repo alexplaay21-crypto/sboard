@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Modified for sBoard: use sBoard's label and settings activity. -->
+<input-method xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:settingsActivity="dev.patrickgold.florisboard.app.FlorisAppActivity"
+    android:supportsInlineSuggestions="true"
+    android:supportsSwitchingToNextInputMethod="true"
+    tools:targetApi="r">
+
+    <!-- Add default system subtype so we can properly set the icon and label -->
+    <subtype
+        android:label="@string/sboard_floris_ime_name"
+        android:imeSubtypeMode="keyboard"
+        android:imeSubtypeExtraValue="AsciiCapable"
+        android:isAsciiCapable="true"
+        android:overridesImplicitlyEnabledSubtype="true"/>
+
+</input-method>

@@ -11,12 +11,15 @@ import android.graphics.drawable.ColorDrawable
 import android.inputmethodservice.InputMethodService
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.PopupWindow
@@ -31,6 +34,19 @@ import java.util.Locale
 
 /** Typed input stays local. Speech is sent only to the Android recognizer after an explicit tap. */
 class SBoardInputMethodService : InputMethodService() {
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var backspacePressed = false
+    private var backspaceRepeatIndex = 0
+    private var pendingKeyboardRefresh = false
+    private val backspaceRepeat = object : Runnable {
+        override fun run() {
+            if (!backspacePressed) return
+            deleteOne(refresh = false)
+            backspaceRepeatIndex++
+            mainHandler.postDelayed(this, KeyboardTextPolicy.backspaceRepeatDelayMs(backspaceRepeatIndex))
+        }
+    }
 
     private enum class Layout { RU, EN, SYMBOLS, EMOJI }
 
@@ -98,12 +114,14 @@ class SBoardInputMethodService : InputMethodService() {
     }
 
     override fun onFinishInput() {
+        stopBackspaceRepeat()
         releaseSpeechRecognizer(cancel = true)
         closeSpellChecker()
         super.onFinishInput()
     }
 
     override fun onDestroy() {
+        stopBackspaceRepeat()
         releaseSpeechRecognizer(cancel = true)
         super.onDestroy()
     }
@@ -132,6 +150,10 @@ class SBoardInputMethodService : InputMethodService() {
     }
 
     private fun renderKeyboard() {
+        if (backspacePressed) {
+            pendingKeyboardRefresh = true
+            return
+        }
         val root = keyboardRoot ?: return
         root.removeAllViews()
         root.setBackgroundColor(if (lightTheme) Color.rgb(246, 246, 248) else Color.BLACK)
@@ -197,7 +219,7 @@ class SBoardInputMethodService : InputMethodService() {
             numericBottom.addView(makeKey("−", KeyStyle.TOOL) { commit("-") }, weightParams(1f))
             numericBottom.addView(makeKey("0") { commit("0") }, weightParams(1f))
             numericBottom.addView(makeKey(",", KeyStyle.TOOL) { commit(",") }, weightParams(1f))
-            numericBottom.addView(makeKey("⌫", KeyStyle.TOOL) { deleteOne() }, weightParams(1f))
+            numericBottom.addView(makeBackspaceKey(), weightParams(1f))
             numericBottom.addView(makeKey("↵", KeyStyle.ACCENT) { performEnter() }, weightParams(1f))
             root.addView(numericBottom)
             return
@@ -229,7 +251,7 @@ class SBoardInputMethodService : InputMethodService() {
                     val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
                     line.addView(makeKey("⇧", if (shifted) KeyStyle.ACCENT else KeyStyle.TOOL) { shifted = !shifted; renderKeyboard() }, weightParams(1.25f))
                     keys.forEach { key -> line.addView(makeLetterKey(key), weightParams(1f)) }
-                    line.addView(makeKey("⌫", KeyStyle.TOOL) { deleteOne() }, weightParams(1.25f))
+                    line.addView(makeBackspaceKey(), weightParams(1.25f))
                     root.addView(line)
                 } else addLetterRow(root, keys)
             }
@@ -242,7 +264,7 @@ class SBoardInputMethodService : InputMethodService() {
             renderKeyboard()
         }, weightParams(1.2f))
         if (layout == Layout.EMOJI) {
-            bottom.addView(makeKey("⌫", KeyStyle.TOOL) { deleteOne() }, weightParams(1f))
+            bottom.addView(makeBackspaceKey(), weightParams(1f))
             bottom.addView(makeKey(if (alphabetLayout == Layout.EN) "Space" else "Пробел", KeyStyle.LETTER) { commit(" ") }, weightParams(3f))
             bottom.addView(makeKey("↵", KeyStyle.ACCENT) { performEnter() }, weightParams(1.2f))
         } else {
@@ -373,7 +395,7 @@ class SBoardInputMethodService : InputMethodService() {
     private fun addSymbolRow(root: LinearLayout, keys: String) {
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         keys.split(" ").forEach { key ->
-            if (key == "⌫") row.addView(makeKey(key, KeyStyle.TOOL) { deleteOne() }, weightParams(1f))
+            if (key == "⌫") row.addView(makeBackspaceKey(), weightParams(1f))
             else row.addView(makeKey(key) { commit(key) }, weightParams(1f))
         }
         root.addView(row)
@@ -425,6 +447,42 @@ class SBoardInputMethodService : InputMethodService() {
                 action()
             }
         }
+    }
+
+    private fun makeBackspaceKey(): TextView = makeKey("⌫", KeyStyle.TOOL) {
+        // Accessibility click path. Touch input is handled below and consumes the event,
+        // preventing the framework from dispatching an additional click on ACTION_UP.
+        deleteOne()
+    }.apply {
+        contentDescription = getString(com.sboard.app.R.string.ime_backspace)
+        setOnTouchListener { view, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    if (hapticsEnabled) view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    stopBackspaceRepeat()
+                    backspacePressed = true
+                    backspaceRepeatIndex = 0
+                    deleteOne(refresh = false)
+                    mainHandler.postDelayed(backspaceRepeat, 420L)
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_OUTSIDE -> {
+                    stopBackspaceRepeat()
+                    if (pendingKeyboardRefresh) {
+                        pendingKeyboardRefresh = false
+                        renderKeyboard()
+                    } else requestSpellingSuggestions()
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> true
+                else -> true
+            }
+        }
+    }
+
+    private fun stopBackspaceRepeat() {
+        backspacePressed = false
+        mainHandler.removeCallbacks(backspaceRepeat)
     }
 
     private fun keyHeightDp() = configuredKeyHeightDp.coerceIn(36, 56)
@@ -612,12 +670,20 @@ class SBoardInputMethodService : InputMethodService() {
         renderKeyboard()
     }
 
-    private fun deleteOne() {
+    private fun deleteOne(refresh: Boolean = true) {
         val connection = currentInputConnection ?: return
-        connection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL))
-        connection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DEL))
+        val selected = connection.getSelectedText(0)
+        if (!selected.isNullOrEmpty()) {
+            connection.commitText("", 1)
+        } else {
+            val before = connection.getTextBeforeCursor(32, 0)?.toString()
+            val units = KeyboardTextPolicy.utf16UnitsForLastGrapheme(before)
+            if (units > 0) {
+                connection.deleteSurroundingText(units, 0)
+            }
+        }
         requestSpellingSuggestions()
-        renderKeyboard()
+        if (refresh) renderKeyboard()
     }
 
     private fun performEnter() {

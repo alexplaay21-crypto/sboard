@@ -1,0 +1,57 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <queries>
+        <intent><action android:name="android.view.InputMethod" /></intent>
+        <intent><action android:name="android.service.textservice.SpellCheckerService" /></intent>
+    </queries>
+    <application>
+        <activity
+            android:name="dev.patrickgold.florisboard.app.FlorisAppActivity"
+            android:exported="false"
+            android:label="@string/sboard_floris_ime_name"
+            android:theme="@style/FlorisAppTheme" />
+        <service
+            android:name="dev.patrickgold.florisboard.FlorisImeService"
+            android:label="@string/sboard_floris_ime_name"
+            android:permission="android.permission.BIND_INPUT_METHOD"
+            android:directBootAware="true"
+            android:exported="true">
+            <intent-filter><action android:name="android.view.InputMethod" /></intent-filter>
+            <meta-data android:name="android.view.im" android:resource="@xml/method" />
+        </service>
+        <service
+            android:name="dev.patrickgold.florisboard.FlorisSpellCheckerService"
+            android:label="@string/sboard_floris_ime_name"
+            android:permission="android.permission.BIND_TEXT_SERVICE"
+            android:exported="true">
+            <intent-filter><action android:name="android.service.textservice.SpellCheckerService" /></intent-filter>
+            <meta-data android:name="android.view.textservice.scs" android:resource="@xml/spellchecker" />
+        </service>
+        <activity
+            android:name="dev.patrickgold.florisboard.ime.clipboard.FlorisCopyToClipboardActivity"
+            android:exported="true"
+            android:theme="@style/FlorisAppTheme.Transparent">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name="dev.patrickgold.florisboard.lib.crashutility.CrashDialogActivity"
+            android:exported="false"
+            android:theme="@style/CrashDialogTheme" />
+        <provider
+            android:name="dev.patrickgold.florisboard.ime.clipboard.provider.ClipboardMediaProvider"
+            android:authorities="${applicationId}.provider.clipboard"
+            android:grantUriPermissions="true"
+            android:exported="false" />
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.provider.file"
+            android:grantUriPermissions="true"
+            android:exported="false">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
+        </provider>
+    </application>
+</manifest>

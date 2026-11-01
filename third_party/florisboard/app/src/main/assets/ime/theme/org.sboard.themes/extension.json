@@ -1,0 +1,31 @@
+{
+  "$": "ime.extension.theme",
+  "meta": {
+    "id": "org.sboard.themes",
+    "version": "1.0.0",
+    "title": "sBoard keyboard themes",
+    "description": "sBoard light and dark themes, adapted from FlorisBoard v0.5.2 theme stylesheets under Apache-2.0.",
+    "maintainers": [
+      "sBoard contributors"
+    ],
+    "license": "apache-2.0"
+  },
+  "themes": [
+    {
+      "id": "sboard_light",
+      "label": "sBoard Light",
+      "authors": [
+        "sBoard contributors"
+      ],
+      "isNight": false
+    },
+    {
+      "id": "sboard_dark",
+      "label": "sBoard Dark",
+      "authors": [
+        "sBoard contributors"
+      ],
+      "isNight": true
+    }
+  ]
+}

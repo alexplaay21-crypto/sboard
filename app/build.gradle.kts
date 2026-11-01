@@ -49,6 +49,7 @@ dependencies {
     implementation("org.bouncycastle:bcprov-jdk18on:1.82")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.android.gms:play-services-auth:22.0.0")
+    implementation(project(":keyboard:floris"))
     kapt("androidx.room:room-compiler:2.8.5")
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")

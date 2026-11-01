@@ -16,6 +16,7 @@ import com.sboard.app.feature.sync.SyncAutomationScheduler
 import com.sboard.app.feature.sync.SyncAutomationRuntime
 import com.sboard.app.feature.sync.GoogleDriveSyncAutomationExecutor
 import com.sboard.app.feature.vault.VaultSessionProvider
+import dev.patrickgold.florisboard.FlorisApplication
 
 /** Installs a Room observer and reattaches it if a restore replaces the Room singleton. */
 object SBoardDatabaseBackupObserver {
@@ -54,7 +55,7 @@ object SBoardDatabaseBackupObserver {
 }
 
 /** Process-wide wiring for durable, event-driven encrypted backups. */
-class SBoardApplication : Application() {
+class SBoardApplication : FlorisApplication() {
     override fun onCreate() {
         super.onCreate()
 
