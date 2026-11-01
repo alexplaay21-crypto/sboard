@@ -10,6 +10,12 @@ import java.util.Base64
 import org.json.JSONObject
 
 class WebAuthnAssertionEngineTest {
+    private fun request(): String {
+        val challenge = Base64.getUrlEncoder().withoutPadding()
+            .encodeToString(ByteArray(32) { (it + 1).toByte() })
+        return """{"rpId":"example.com","challenge":"$challenge","allowCredentials":[]}"""
+    }
+
     @Test fun createsVerifiableEs256Assertion() {
         val pair = KeyPairGenerator.getInstance("EC").apply { initialize(256) }.generateKeyPair()
         val challenge = Base64.getUrlEncoder().withoutPadding().encodeToString(ByteArray(32) { it.toByte() })
