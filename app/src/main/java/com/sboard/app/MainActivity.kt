@@ -591,7 +591,7 @@ private fun ProfileScreen(session: VaultSession, openRestoreInitially: Boolean =
 }
 
 
-private fun googleAuthorizationFailure(error: Exception): String {
+private fun googleAuthorizationFailure(error: Throwable): String {
     val apiError = error as? com.google.android.gms.common.api.ApiException
     return when (apiError?.statusCode) {
         com.google.android.gms.common.api.CommonStatusCodes.DEVELOPER_ERROR ->
