@@ -1,6 +1,5 @@
 package com.sboard.app.keyboard
 
-import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
 import android.inputmethodservice.InputMethodService
@@ -8,6 +7,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
+import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
 import android.widget.Button
 import android.widget.LinearLayout
@@ -29,18 +29,22 @@ class SBoardInputMethodService : InputMethodService() {
     private var keyboardRoot: LinearLayout? = null
     private var isPasswordField = false
     private var isNumericField = false
+    private var showNumberRow = true
+    private var hapticsEnabled = true
+    private var lightTheme = false
 
     override fun onCreate() {
         super.onCreate()
-        val prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        layout = if (prefs.getString(KEY_LAYOUT, "ru") == "en") Layout.EN else Layout.RU
+        val prefs = KeyboardSettings.preferences(this)
+        layout = if (prefs.getString(KeyboardSettings.KEY_LAYOUT, "ru") == "en") Layout.EN else Layout.RU
+        loadSettings()
     }
 
     override fun onCreateInputView(): View {
         keyboardRoot = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(5), dp(7), dp(5), dp(7))
-            setBackgroundColor(Color.rgb(25, 27, 30))
+            setBackgroundColor(if (lightTheme) Color.rgb(235, 237, 241) else Color.rgb(25, 27, 30))
         }
         renderKeyboard()
         return keyboardRoot!!
@@ -48,6 +52,7 @@ class SBoardInputMethodService : InputMethodService() {
 
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
         super.onStartInput(attribute, restarting)
+        loadSettings()
         val inputType = attribute?.inputType ?: 0
         val variation = inputType and android.text.InputType.TYPE_MASK_VARIATION
         val typeClass = inputType and android.text.InputType.TYPE_MASK_CLASS
@@ -62,6 +67,18 @@ class SBoardInputMethodService : InputMethodService() {
         renderKeyboard()
     }
 
+    private fun loadSettings() {
+        val prefs = KeyboardSettings.preferences(this)
+        showNumberRow = prefs.getBoolean(KeyboardSettings.KEY_NUMBER_ROW, true)
+        hapticsEnabled = prefs.getBoolean(KeyboardSettings.KEY_HAPTICS, true)
+        lightTheme = when (prefs.getString(KeyboardSettings.KEY_THEME, "system")) {
+            "light" -> true
+            "dark" -> false
+            else -> (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                android.content.res.Configuration.UI_MODE_NIGHT_NO
+        }
+    }
+
     override fun onUpdateSelection(
         oldSelStart: Int, oldSelEnd: Int,
         newSelStart: Int, newSelEnd: Int,
@@ -74,6 +91,7 @@ class SBoardInputMethodService : InputMethodService() {
     private fun renderKeyboard() {
         val root = keyboardRoot ?: return
         root.removeAllViews()
+        root.setBackgroundColor(if (lightTheme) Color.rgb(235, 237, 241) else Color.rgb(25, 27, 30))
 
         val top = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -118,6 +136,8 @@ class SBoardInputMethodService : InputMethodService() {
             root.addView(numericBottom)
             return
         }
+
+        if (showNumberRow && layout != Layout.SYMBOLS) addKeyRow(root, "1 2 3 4 5 6 7 8 9 0".split(" "))
 
         if (layout == Layout.SYMBOLS) {
             val rows = listOf(
@@ -169,10 +189,10 @@ class SBoardInputMethodService : InputMethodService() {
             text = label
             isAllCaps = false
             setTextSize(TypedValue.COMPLEX_UNIT_SP, if (label.length > 3) 10f else 17f)
-            setTextColor(if (accent) Color.rgb(20, 21, 23) else Color.rgb(244, 243, 238))
+            setTextColor(if (accent || lightTheme) Color.rgb(28, 30, 34) else Color.rgb(244, 243, 238))
             setTypeface(typeface, Typeface.NORMAL)
             setBackgroundTintList(android.content.res.ColorStateList.valueOf(
-                if (accent) Color.rgb(213, 185, 75) else Color.rgb(48, 50, 54)
+                if (accent) Color.rgb(213, 185, 75) else if (lightTheme) Color.WHITE else Color.rgb(48, 50, 54)
             ))
             minWidth = 0
             minimumWidth = 0
@@ -182,7 +202,10 @@ class SBoardInputMethodService : InputMethodService() {
             layoutParams = LinearLayout.LayoutParams(0, dp(47), 1f).apply {
                 setMargins(dp(2), dp(3), dp(2), dp(3))
             }
-            setOnClickListener { action() }
+            setOnClickListener {
+                if (hapticsEnabled) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                action()
+            }
         }
     }
 
@@ -220,16 +243,12 @@ class SBoardInputMethodService : InputMethodService() {
 
     private fun toggleLanguage() {
         layout = if (layout == Layout.RU) Layout.EN else Layout.RU
-        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-            .putString(KEY_LAYOUT, if (layout == Layout.EN) "en" else "ru").apply()
+        KeyboardSettings.preferences(this).edit()
+            .putString(KeyboardSettings.KEY_LAYOUT, if (layout == Layout.EN) "en" else "ru").apply()
         shifted = false
         renderKeyboard()
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
-    companion object {
-        private const val PREFS = "sboard_keyboard"
-        private const val KEY_LAYOUT = "layout"
-    }
 }

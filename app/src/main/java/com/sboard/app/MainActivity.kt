@@ -46,6 +46,7 @@ import kotlinx.coroutines.launch
 import java.io.File
 import com.sboard.app.feature.tools.clipboard.SBoardClipboardWriter
 import com.sboard.app.feature.tools.generator.PasswordGenerator
+import com.sboard.app.keyboard.KeyboardSettings
 import com.sboard.app.feature.vault.VaultScreen
 import com.sboard.app.feature.vault.VaultSession
 import com.sboard.app.feature.backup.EncryptedBackupManager
@@ -294,10 +295,10 @@ private fun QuickAction(label: String, icon: androidx.compose.ui.graphics.vector
 @Composable
 private fun KeyboardScreen() {
     val context = LocalContext.current
-    var haptics by rememberSaveable { mutableStateOf(true) }
-    var numberRow by rememberSaveable { mutableStateOf(true) }
-    var autocorrect by rememberSaveable { mutableStateOf(true) }
-    var theme by rememberSaveable { mutableStateOf(tr("Системная")) }
+    val keyboardPrefs = remember(context) { KeyboardSettings.preferences(context) }
+    var haptics by rememberSaveable { mutableStateOf(keyboardPrefs.getBoolean(KeyboardSettings.KEY_HAPTICS, true)) }
+    var numberRow by rememberSaveable { mutableStateOf(keyboardPrefs.getBoolean(KeyboardSettings.KEY_NUMBER_ROW, true)) }
+    var theme by rememberSaveable { mutableStateOf(keyboardPrefs.getString(KeyboardSettings.KEY_THEME, "system") ?: "system") }
     ScreenColumn {
         Header(tr("Клавиатура"), tr("Настройте ввод и внешний вид sBoard"))
         Panel {
@@ -319,16 +320,18 @@ private fun KeyboardScreen() {
         }
         Panel {
             Text(tr("Ввод текста"), color = Cream, fontWeight = FontWeight.SemiBold)
-            SettingSwitch(tr("Числовой ряд"), numberRow) { numberRow = it }
-            SettingSwitch(tr("Вибрация клавиш"), haptics) { haptics = it }
-            SettingSwitch(tr("Автозамена"), autocorrect) { autocorrect = it }
+            SettingSwitch(tr("Числовой ряд"), numberRow) { numberRow = it; keyboardPrefs.edit().putBoolean(KeyboardSettings.KEY_NUMBER_ROW, it).apply() }
+            SettingSwitch(tr("Вибрация клавиш"), haptics) { haptics = it; keyboardPrefs.edit().putBoolean(KeyboardSettings.KEY_HAPTICS, it).apply() }
         }
         Panel {
             Text(tr("Внешний вид"), color = Cream, fontWeight = FontWeight.SemiBold)
             Text(tr("Тема клавиатуры"), color = Muted, fontSize = 12.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(tr("Системная"), tr("Тёмная"), tr("Светлая")).forEach {
-                    FilterChip(selected = theme == it, onClick = { theme = it }, label = { Text(it) })
+                listOf("system" to tr("Системная"), "dark" to tr("Тёмная"), "light" to tr("Светлая")).forEach { (value, label) ->
+                    FilterChip(selected = theme == value, onClick = {
+                        theme = value
+                        keyboardPrefs.edit().putString(KeyboardSettings.KEY_THEME, value).apply()
+                    }, label = { Text(label) })
                 }
             }
             KeyboardPreview()
@@ -423,23 +426,6 @@ private fun ToolsScreen() {
                     color = Muted,
                     fontSize = 11.sp
                 )
-            }
-        }
-        ToolRow(tr("Переводчик"), tr("Провайдер и экран будут подключены отдельно"), Icons.Rounded.Translate)
-        ToolRow(tr("AI-помощник"), tr("Только текст, который вы явно передали"), Icons.Rounded.AutoAwesome)
-        ToolRow(tr("Буфер обмена"), tr("Локальная история с защитой данных"), Icons.Rounded.ContentPaste)
-    }
-}
-
-@Composable
-private fun ToolRow(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    Panel {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, tint = Gold)
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text(title, color = Cream, fontWeight = FontWeight.Medium)
-                Text(subtitle, color = Muted, fontSize = 11.sp)
             }
         }
     }
