@@ -43,6 +43,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import java.io.File
 import com.sboard.app.feature.tools.clipboard.SBoardClipboardWriter
 import com.sboard.app.feature.tools.generator.PasswordGenerator
@@ -60,6 +61,7 @@ import com.sboard.app.feature.backup.DriveBackupRestoreCoordinator
 import com.sboard.app.feature.backup.GoogleDriveOAuthManager
 import com.sboard.app.feature.vault.VaultSessionProvider
 import com.sboard.app.feature.sync.SyncAutomationScheduler
+import com.sboard.app.feature.sync.SyncAutomationStatusStore
 import com.sboard.app.feature.vault.MasterPasswordManager
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -298,6 +300,7 @@ private fun KeyboardScreen() {
     val keyboardPrefs = remember(context) { KeyboardSettings.preferences(context) }
     var haptics by rememberSaveable { mutableStateOf(keyboardPrefs.getBoolean(KeyboardSettings.KEY_HAPTICS, true)) }
     var numberRow by rememberSaveable { mutableStateOf(keyboardPrefs.getBoolean(KeyboardSettings.KEY_NUMBER_ROW, true)) }
+    var keyHeight by rememberSaveable { mutableFloatStateOf(keyboardPrefs.getInt(KeyboardSettings.KEY_HEIGHT, 44).coerceIn(36, 56).toFloat()) }
     var theme by rememberSaveable { mutableStateOf(keyboardPrefs.getString(KeyboardSettings.KEY_THEME, "system") ?: "system") }
     var allowNetworkSpeech by rememberSaveable { mutableStateOf(keyboardPrefs.getBoolean(KeyboardSettings.KEY_NETWORK_SPEECH, false)) }
     var microphoneGranted by rememberSaveable {
@@ -328,6 +331,10 @@ private fun KeyboardScreen() {
         Panel {
             Text(tr("Ввод текста"), color = Cream, fontWeight = FontWeight.SemiBold)
             SettingSwitch(tr("Числовой ряд"), numberRow) { numberRow = it; keyboardPrefs.edit().putBoolean(KeyboardSettings.KEY_NUMBER_ROW, it).apply() }
+            Text("${tr("Высота клавиш")}: ${keyHeight.toInt()} dp", color = Muted, fontSize = 12.sp)
+            Slider(value = keyHeight, onValueChange = { keyHeight = it }, onValueChangeFinished = {
+                keyboardPrefs.edit().putInt(KeyboardSettings.KEY_HEIGHT, keyHeight.toInt().coerceIn(36, 56)).apply()
+            }, valueRange = 36f..56f, steps = 19)
             SettingSwitch(tr("Вибрация клавиш"), haptics) { haptics = it; keyboardPrefs.edit().putBoolean(KeyboardSettings.KEY_HAPTICS, it).apply() }
         }
         Panel {
@@ -618,9 +625,14 @@ private fun BackupSettingsScreen(onBack: () -> Unit) {
     var statusMessage by remember { mutableStateOf<String?>(null) }
     var statusError by remember { mutableStateOf(false) }
     val backupStatusStore = remember(context) { BackupAutomationStatusStore(context) }
+    val syncStatusStore = remember(context) { SyncAutomationStatusStore(context) }
     val driveClient = remember { GoogleDriveBackupClient() }
     var backupStatus by remember { mutableStateOf(backupStatusStore.snapshot()) }
+    var syncStatus by remember { mutableStateOf(syncStatusStore.snapshot()) }
     fun refreshBackupStatus() { backupStatus = backupStatusStore.snapshot() }
+    LaunchedEffect(syncStatusStore) {
+        while (true) { syncStatus = syncStatusStore.snapshot(); delay(1_500) }
+    }
     fun verifyAndConnectDrive(accessToken: String?) {
         if (accessToken.isNullOrBlank()) {
             driveConnected = false
@@ -676,6 +688,29 @@ private fun BackupSettingsScreen(onBack: () -> Unit) {
             TextButton(onClick = onBack) { Text(tr("← Назад"), color = Gold) }
         }
         Header(tr("Автоматическое резервирование"), tr("Настройки фоновой синхронизации sBoard"))
+        Panel {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(tr("Синхронизация между устройствами"), color = Cream, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                TextButton(onClick = { syncStatus = syncStatusStore.snapshot() }) { Text(tr("Обновить"), color = Gold) }
+            }
+            val syncLabel = when (syncStatus.result) {
+                SyncAutomationStatusStore.RUNNING -> tr("Выполняется")
+                SyncAutomationStatusStore.SUCCESS -> tr("Успешно")
+                SyncAutomationStatusStore.ATTENTION -> tr("Требуется внимание")
+                SyncAutomationStatusStore.FAILED -> tr("Ошибка")
+                else -> tr("Ещё не синхронизировалась")
+            }
+            StatusLine(tr("Состояние"), syncLabel, syncStatus.result == SyncAutomationStatusStore.SUCCESS)
+            syncStatus.lastSuccessAt?.let { time ->
+                StatusLine(tr("Последняя синхронизация"), java.text.DateFormat.getDateTimeInstance().format(java.util.Date(time)), true)
+            }
+            syncStatus.error?.let { Text(it, color = Color(0xFFFF8A80), fontSize = 11.sp) }
+            OutlinedButton(onClick = {
+                SyncAutomationScheduler(context).requestOnForeground()
+                syncStatus = syncStatusStore.snapshot()
+            }, modifier = Modifier.fillMaxWidth()) { Text(tr("Синхронизировать сейчас")) }
+            Text(tr("Новые изменения загружаются в зашифрованном виде. Полученные с другого устройства изменения пока требуют проверки перед применением."), color = Muted, fontSize = 11.sp)
+        }
         Panel {
             Text(tr("Фоновое резервирование"), color = Cream, fontWeight = FontWeight.SemiBold)
             Text(

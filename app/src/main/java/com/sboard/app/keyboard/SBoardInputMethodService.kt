@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
+import android.graphics.drawable.ColorDrawable
 import android.inputmethodservice.InputMethodService
 import android.os.Build
 import android.os.Bundle
@@ -17,6 +18,12 @@ import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
 import android.view.View
+import android.widget.FrameLayout
+import android.widget.PopupWindow
+import android.view.textservice.SpellCheckerSession
+import android.view.textservice.SuggestionsInfo
+import android.view.textservice.TextInfo
+import android.view.textservice.TextServicesManager
 import android.view.inputmethod.EditorInfo
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -35,11 +42,18 @@ class SBoardInputMethodService : InputMethodService() {
     private var isPasswordField = false
     private var isNumericField = false
     private var showNumberRow = true
+    private var configuredKeyHeightDp = 44
     private var hapticsEnabled = true
     private var lightTheme = false
     private var allowNetworkSpeech = false
     private var speechRecognizer: SpeechRecognizer? = null
     private var voiceStatus: String? = null
+    private var spellCheckerSession: SpellCheckerSession? = null
+    private var spellQueryWord: String = ""
+    private var suggestionWord: String = ""
+    private var spellingSuggestions: List<String> = emptyList()
+    private var spellSequence = 0
+    private val spellWordsBySequence = mutableMapOf<Int, String>()
 
     override fun onCreate() {
         super.onCreate()
@@ -73,11 +87,19 @@ class SBoardInputMethodService : InputMethodService() {
             )) || (typeClass == android.text.InputType.TYPE_CLASS_NUMBER &&
             variation == android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD)
         if (isPasswordField) releaseSpeechRecognizer(cancel = true)
+        closeSpellChecker()
+        if (!isPasswordField && !isNumericField && typeClass == android.text.InputType.TYPE_CLASS_TEXT &&
+            (inputType and android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS) == 0) {
+            openSpellChecker()
+        }
+        spellingSuggestions = emptyList()
+        suggestionWord = ""
         renderKeyboard()
     }
 
     override fun onFinishInput() {
         releaseSpeechRecognizer(cancel = true)
+        closeSpellChecker()
         super.onFinishInput()
     }
 
@@ -89,6 +111,7 @@ class SBoardInputMethodService : InputMethodService() {
     private fun loadSettings() {
         val prefs = KeyboardSettings.preferences(this)
         showNumberRow = prefs.getBoolean(KeyboardSettings.KEY_NUMBER_ROW, true)
+        configuredKeyHeightDp = prefs.getInt(KeyboardSettings.KEY_HEIGHT, 44).coerceIn(36, 56)
         hapticsEnabled = prefs.getBoolean(KeyboardSettings.KEY_HAPTICS, true)
         allowNetworkSpeech = prefs.getBoolean(KeyboardSettings.KEY_NETWORK_SPEECH, false)
         lightTheme = when (prefs.getString(KeyboardSettings.KEY_THEME, "system")) {
@@ -105,29 +128,20 @@ class SBoardInputMethodService : InputMethodService() {
         candidatesStart: Int, candidatesEnd: Int
     ) {
         super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
-        // No text-learning or suggestion history is maintained by this IME.
+        requestSpellingSuggestions()
     }
 
     private fun renderKeyboard() {
         val root = keyboardRoot ?: return
         root.removeAllViews()
-        root.setBackgroundColor(if (lightTheme) Color.rgb(235, 237, 241) else Color.rgb(25, 27, 30))
+        root.setBackgroundColor(if (lightTheme) Color.rgb(246, 246, 248) else Color.BLACK)
 
         val top = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        val brand = TextView(this).apply {
-            text = if (isPasswordField) "🔒  sBoard" else "sBoard"
-            setTextColor(if (lightTheme) Color.rgb(80, 83, 90) else Color.rgb(174, 178, 187))
-            setTextSize(12f)
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(8), 0, dp(8), 0)
-            contentDescription = if (isPasswordField) getString(com.sboard.app.R.string.ime_private_input) else "sBoard"
-        }
-        top.addView(brand, LinearLayout.LayoutParams(0, dp(36), 1f))
-        top.addView(makeKey(if (alphabetLayout == Layout.EN) "EN" else "RU", KeyStyle.ACCENT, 54) {
+        top.addView(makeKey("😊", KeyStyle.TOOL) { layout = Layout.EMOJI; renderKeyboard() }, weightParams(1f))
+        top.addView(makeKey(if (alphabetLayout == Layout.EN) "A/Я" else "Я/A", KeyStyle.TOOL) {
             if (layout == Layout.SYMBOLS) {
                 alphabetLayout = if (alphabetLayout == Layout.RU) Layout.EN else Layout.RU
             } else {
@@ -135,21 +149,35 @@ class SBoardInputMethodService : InputMethodService() {
                 alphabetLayout = layout
             }
             saveAlphabetLayout()
+            restartSpellCheckerForLanguage()
             shifted = false
             renderKeyboard()
-        })
+        }, weightParams(1f))
         if (!isPasswordField && !isNumericField) {
-            top.addView(makeKey("📋", KeyStyle.TOOL, 42) { pasteFromClipboard() }.apply {
+            top.addView(makeKey("▣", KeyStyle.TOOL) { pasteFromClipboard() }.apply {
                 contentDescription = getString(com.sboard.app.R.string.ime_paste_from_clipboard)
-            })
-            val micLabel = if (speechRecognizer == null) "🎙" else "■"
-            top.addView(makeKey(micLabel, if (speechRecognizer == null) KeyStyle.TOOL else KeyStyle.ACCENT, 48) {
-                if (speechRecognizer == null) startVoiceInput() else stopVoiceInput()
-            }.apply {
-                contentDescription = getString(if (speechRecognizer == null) com.sboard.app.R.string.ime_voice_input else com.sboard.app.R.string.ime_stop_voice_input)
-            })
+            }, weightParams(1f))
         }
+        top.addView(makeKey("•••", KeyStyle.TOOL) { showToolbarMenu(it) }, weightParams(1f))
         root.addView(top)
+        if (spellingSuggestions.isNotEmpty() && !isPasswordField) {
+            val candidates = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+            }
+            spellingSuggestions.take(3).forEach { candidate ->
+                val item = TextView(this).apply {
+                    text = candidate
+                    gravity = Gravity.CENTER
+                    setTextSize(15f)
+                    setTextColor(if (lightTheme) Color.rgb(54, 56, 61) else Color.rgb(232, 232, 235))
+                    setPadding(dp(12), 0, dp(12), 0)
+                    setOnClickListener { replaceCurrentWord(candidate) }
+                }
+                candidates.addView(item, LinearLayout.LayoutParams(0, dp(34), 1f))
+            }
+            root.addView(candidates)
+        }
 
         voiceStatus?.let { status ->
             val statusView = TextView(this).apply {
@@ -200,10 +228,10 @@ class SBoardInputMethodService : InputMethodService() {
                 if (index == 2) {
                     val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
                     line.addView(makeKey("⇧", if (shifted) KeyStyle.ACCENT else KeyStyle.TOOL) { shifted = !shifted; renderKeyboard() }, weightParams(1.25f))
-                    keys.forEach { key -> line.addView(makeKey(key) { commit(key) }, weightParams(1f)) }
+                    keys.forEach { key -> line.addView(makeLetterKey(key), weightParams(1f)) }
                     line.addView(makeKey("⌫", KeyStyle.TOOL) { deleteOne() }, weightParams(1.25f))
                     root.addView(line)
-                } else addKeyRow(root, keys)
+                } else addLetterRow(root, keys)
             }
         }
 
@@ -218,13 +246,14 @@ class SBoardInputMethodService : InputMethodService() {
             bottom.addView(makeKey(if (alphabetLayout == Layout.EN) "Space" else "Пробел", KeyStyle.LETTER) { commit(" ") }, weightParams(3f))
             bottom.addView(makeKey("↵", KeyStyle.ACCENT) { performEnter() }, weightParams(1.2f))
         } else {
-            bottom.addView(makeKey("😊", KeyStyle.TOOL) {
-                alphabetLayout = layout
-                layout = Layout.EMOJI
-                renderKeyboard()
-            }, weightParams(0.9f))
             bottom.addView(makeKey("🌐", KeyStyle.TOOL) { toggleLanguage() }, weightParams(0.9f))
-            bottom.addView(makeKey(",", KeyStyle.TOOL) { commit(",") }, weightParams(0.7f))
+            bottom.addView(makeKey(if (!isPasswordField && !isNumericField) "🎙" else ",", KeyStyle.TOOL) {
+                if (!isPasswordField && !isNumericField) {
+                    if (speechRecognizer == null) startVoiceInput() else stopVoiceInput()
+                } else commit(",")
+            }.apply {
+                if (!isPasswordField && !isNumericField) contentDescription = getString(if (speechRecognizer == null) com.sboard.app.R.string.ime_voice_input else com.sboard.app.R.string.ime_stop_voice_input)
+            }, weightParams(0.9f))
             bottom.addView(makeKey(if (layout == Layout.EN) "Space" else "Пробел") { commit(" ") }, weightParams(3.1f))
             bottom.addView(makeKey(".", KeyStyle.TOOL) { commit(".") }, weightParams(0.7f))
             bottom.addView(makeKey("↵", KeyStyle.ACCENT) { performEnter() }, weightParams(1.1f))
@@ -238,6 +267,107 @@ class SBoardInputMethodService : InputMethodService() {
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         keys.forEach { key -> row.addView(makeKey(key) { onKey(key) }, weightParams(1f)) }
         root.addView(row)
+    }
+
+    private fun addLetterRow(root: LinearLayout, keys: List<String>) {
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        keys.forEach { key -> row.addView(makeLetterKey(key), weightParams(1f)) }
+        root.addView(row)
+    }
+
+    private fun makeLetterKey(key: String): View {
+        val alternatives = KeyboardKeyAlternatives.forKey(key, alphabetLayout == Layout.RU)
+        val cell = FrameLayout(this).apply {
+            isClickable = true
+            isFocusable = true
+            background = RippleDrawable(
+                ColorStateList.valueOf(if (lightTheme) 0x16000000 else 0x18FFFFFF),
+                ColorDrawable(Color.TRANSPARENT), null
+            )
+            setOnClickListener {
+                if (hapticsEnabled) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                commit(key)
+            }
+            if (alternatives.isNotEmpty()) setOnLongClickListener { showAlternatives(this, key, alternatives); true }
+            contentDescription = if (alternatives.isEmpty()) key else "$key, ${alternatives.joinToString()}, long press for alternatives"
+        }
+        val alt = TextView(this).apply {
+            text = alternatives.firstOrNull().orEmpty()
+            setTextColor(if (lightTheme) Color.rgb(105, 105, 110) else Color.rgb(135, 135, 140))
+            setTextSize(10f)
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+        }
+        val main = TextView(this).apply {
+            text = key
+            setTextColor(if (lightTheme) Color.BLACK else Color.WHITE)
+            setTextSize(23f)
+            typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+            gravity = Gravity.CENTER
+            includeFontPadding = false
+            isImportantForAccessibility = false
+        }
+        cell.addView(alt, FrameLayout.LayoutParams(-1, dp(15), Gravity.TOP or Gravity.CENTER_HORIZONTAL))
+        cell.addView(main, FrameLayout.LayoutParams(-1, -1).apply { topMargin = dp(5) })
+        return cell
+    }
+
+    private fun showToolbarMenu(anchor: View) {
+        val menu = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(6), dp(6), dp(6), dp(6))
+            setBackgroundColor(if (lightTheme) Color.rgb(250, 250, 252) else Color.rgb(35, 35, 38))
+        }
+        val popup = PopupWindow(menu, dp(190), -2, true).apply {
+            elevation = dp(8).toFloat()
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        }
+        val actions = buildList {
+            add(getString(com.sboard.app.R.string.ime_symbols) to { layout = Layout.SYMBOLS; symbolPage = false; renderKeyboard() })
+            add(getString(com.sboard.app.R.string.ime_emoji) to { layout = Layout.EMOJI; renderKeyboard() })
+            if (!isPasswordField && !isNumericField) add(getString(com.sboard.app.R.string.ime_voice_input) to { startVoiceInput() })
+            add(getString(com.sboard.app.R.string.ime_hide_keyboard) to { requestHideSelf(0) })
+        }
+        actions.forEach { (label, action) ->
+            val item = TextView(this).apply {
+                text = label
+                gravity = Gravity.CENTER_VERTICAL
+                setTextSize(15f)
+                setTextColor(if (lightTheme) Color.BLACK else Color.WHITE)
+                setPadding(dp(14), 0, dp(12), 0)
+                setOnClickListener { popup.dismiss(); action() }
+            }
+            menu.addView(item, LinearLayout.LayoutParams(-1, dp(48)))
+        }
+        popup.showAsDropDown(anchor, -dp(140), -dp(54))
+    }
+
+    private fun showAlternatives(anchor: View, key: String, alternatives: List<String>) {
+        val options = (alternatives + key).distinct()
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+            setBackgroundColor(if (lightTheme) Color.rgb(250, 250, 252) else Color.rgb(35, 35, 38))
+        }
+        val popup = PopupWindow(row, -2, dp(48), true).apply {
+            elevation = dp(8).toFloat()
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        }
+        options.forEach { value ->
+            val option = TextView(this).apply {
+                text = value
+                gravity = Gravity.CENTER
+                setTextSize(20f)
+                setTextColor(if (lightTheme) Color.BLACK else Color.WHITE)
+                setPadding(dp(12), 0, dp(12), 0)
+                setOnClickListener {
+                    if (hapticsEnabled) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    commit(value)
+                    popup.dismiss()
+                }
+            }
+            row.addView(option, LinearLayout.LayoutParams(dp(42), -1))
+        }
+        popup.showAsDropDown(anchor, 0, -dp(54))
     }
 
     private fun addSymbolRow(root: LinearLayout, keys: String) {
@@ -256,18 +386,18 @@ class SBoardInputMethodService : InputMethodService() {
         action: () -> Unit
     ): TextView {
         val fillColor = when (style) {
-            KeyStyle.ACCENT -> Color.rgb(213, 185, 75)
-            KeyStyle.TOOL -> if (lightTheme) Color.rgb(220, 223, 229) else Color.rgb(57, 60, 67)
-            KeyStyle.LETTER -> if (lightTheme) Color.WHITE else Color.rgb(45, 48, 54)
+            KeyStyle.ACCENT -> Color.TRANSPARENT
+            KeyStyle.TOOL -> Color.TRANSPARENT
+            KeyStyle.LETTER -> Color.TRANSPARENT
         }
-        val textColor = if (style == KeyStyle.ACCENT || lightTheme) Color.rgb(29, 31, 35) else Color.rgb(245, 245, 247)
+        val textColor = if (lightTheme) Color.rgb(24, 24, 27) else Color.rgb(245, 245, 247)
         val shape = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
-            cornerRadius = dp(if (style == KeyStyle.LETTER) 10 else 11).toFloat()
+            cornerRadius = dp(22).toFloat()
             setColor(fillColor)
         }
         val ripple = RippleDrawable(
-            ColorStateList.valueOf(if (lightTheme) 0x22000000 else 0x33FFFFFF),
+            ColorStateList.valueOf(if (lightTheme) 0x18000000 else 0x22FFFFFF),
             shape,
             null
         )
@@ -297,10 +427,77 @@ class SBoardInputMethodService : InputMethodService() {
         }
     }
 
-    private fun keyHeightDp() = if (showNumberRow && !isNumericField && layout != Layout.SYMBOLS) 39 else 43
+    private fun keyHeightDp() = configuredKeyHeightDp.coerceIn(36, 56)
 
     private fun weightParams(weight: Float) = LinearLayout.LayoutParams(0, dp(keyHeightDp()), weight).apply {
         setMargins(dp(2), dp(2), dp(2), dp(2))
+    }
+
+    private fun openSpellChecker() {
+        runCatching {
+            val manager = getSystemService(TEXT_SERVICES_MANAGER_SERVICE) as? TextServicesManager
+            spellCheckerSession = manager?.newSpellCheckerSession(
+                null,
+                if (alphabetLayout == Layout.EN) Locale.US else Locale("ru", "RU"),
+                object : SpellCheckerSession.SpellCheckerSessionListener {
+                    override fun onGetSuggestions(results: Array<out SuggestionsInfo>?) {
+                        val info = results?.firstOrNull() ?: return
+                        val currentQuery = spellWordsBySequence.remove(info.sequence) ?: return
+                        if (currentQuery != spellQueryWord) return
+                        val suggestions = buildList {
+                            for (index in 0 until info.suggestionsCount) {
+                                info.getSuggestionAt(index)?.takeIf { it.isNotBlank() && !it.equals(currentQuery, true) }?.let(::add)
+                            }
+                        }.distinct().take(5)
+                        if (!isPasswordField) {
+                            spellingSuggestions = suggestions
+                            suggestionWord = currentQuery
+                            renderKeyboard()
+                        }
+                    }
+                    override fun onGetSentenceSuggestions(results: Array<out android.view.textservice.SentenceSuggestionsInfo>?) = Unit
+                }, true
+            )
+        }
+    }
+
+    private fun requestSpellingSuggestions() {
+        if (isPasswordField || spellCheckerSession == null) return
+        val before = currentInputConnection?.getTextBeforeCursor(64, 0)?.toString().orEmpty()
+        val word = KeyboardTextPolicy.currentWord(before)
+        if (word.length < 2) {
+            spellQueryWord = ""
+            suggestionWord = ""
+            spellingSuggestions = emptyList()
+            return
+        }
+        if (word == spellQueryWord) return
+        spellQueryWord = word
+        val sequence = ++spellSequence
+        spellWordsBySequence[sequence] = word
+        while (spellWordsBySequence.size > 8) spellWordsBySequence.remove(spellWordsBySequence.keys.first())
+        runCatching { spellCheckerSession?.getSuggestions(TextInfo(word, 0, sequence), 5) }
+    }
+
+    private fun replaceCurrentWord(candidate: String) {
+        val original = suggestionWord
+        val replacement = KeyboardTextPolicy.preserveInitialCase(original, candidate)
+        currentInputConnection?.deleteSurroundingText(original.length, 0)
+        currentInputConnection?.commitText(replacement, 1)
+        spellingSuggestions = emptyList()
+        suggestionWord = ""
+        spellQueryWord = ""
+        requestSpellingSuggestions()
+        renderKeyboard()
+    }
+
+    private fun closeSpellChecker() {
+        runCatching { spellCheckerSession?.close() }
+        spellCheckerSession = null
+        spellQueryWord = ""
+        suggestionWord = ""
+        spellingSuggestions = emptyList()
+        spellWordsBySequence.clear()
     }
 
     private fun startVoiceInput() {
@@ -410,13 +607,17 @@ class SBoardInputMethodService : InputMethodService() {
 
     private fun commit(value: String) {
         currentInputConnection?.commitText(value, 1)
-        if (shifted) { shifted = false; renderKeyboard() }
+        if (shifted) shifted = false
+        requestSpellingSuggestions()
+        renderKeyboard()
     }
 
     private fun deleteOne() {
         val connection = currentInputConnection ?: return
         connection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL))
         connection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DEL))
+        requestSpellingSuggestions()
+        renderKeyboard()
     }
 
     private fun performEnter() {
@@ -442,8 +643,14 @@ class SBoardInputMethodService : InputMethodService() {
         alphabetLayout = if (alphabetLayout == Layout.RU) Layout.EN else Layout.RU
         if (layout != Layout.SYMBOLS) layout = alphabetLayout
         saveAlphabetLayout()
+        restartSpellCheckerForLanguage()
         shifted = false
         renderKeyboard()
+    }
+
+    private fun restartSpellCheckerForLanguage() {
+        closeSpellChecker()
+        if (!isPasswordField && !isNumericField) openSpellChecker()
     }
 
     private fun saveAlphabetLayout() {

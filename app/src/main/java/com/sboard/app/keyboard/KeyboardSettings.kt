@@ -10,6 +10,7 @@ object KeyboardSettings {
     const val KEY_HAPTICS = "haptics"
     const val KEY_THEME = "theme"
     const val KEY_NETWORK_SPEECH = "network_speech_allowed"
+    const val KEY_HEIGHT = "key_height_dp"
 
     fun preferences(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 }

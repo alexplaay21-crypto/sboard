@@ -44,9 +44,6 @@ class DriveBackupAutomationExecutor(
                 if (!temp.isFile || temp.length() <= 0L) throw IOException("Encrypted backup was not created")
                 driveClient.uploadVersioned(temp, credentials.accessToken)
                 BackupAutomationResult.SUCCESS
-            } catch (_: SecurityException) {
-                // OAuth permission expired/revoked. Do not retry forever without user action.
-                BackupAutomationResult.SKIPPED
             } finally {
                 // Best-effort removal of encrypted staging data. No plaintext DB copy is created here.
                 temp.delete()

@@ -1,6 +1,7 @@
 package com.sboard.app.feature.sync
 
 import kotlinx.coroutines.Dispatchers
+import com.sboard.app.feature.drive.GoogleDriveApiError
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -53,7 +54,7 @@ class GoogleDriveSyncTransport(
             val request = Request.Builder().url(url).header("Authorization", "Bearer $accessToken").get().build()
             val next: String?
             http.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) throw IOException("Google Drive list failed (${response.code})")
+                if (!response.isSuccessful) throw IOException(GoogleDriveApiError.describe("list", response.code, response.body?.string()))
                 val json = JSONObject(response.body?.string().orEmpty())
                 val files = json.optJSONArray("files")
                 if (files != null) for (i in 0 until files.length()) {
@@ -103,7 +104,7 @@ class GoogleDriveSyncTransport(
                 .build()
             try {
                 http.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) throw IOException("Google Drive upload failed (${response.code})")
+                    if (!response.isSuccessful) throw IOException(GoogleDriveApiError.describe("upload", response.code, response.body?.string()))
                     val json = JSONObject(response.body?.string().orEmpty())
                     val uploaded = RemoteChange(
                         id = json.getString("id"),
@@ -127,7 +128,7 @@ class GoogleDriveSyncTransport(
         val request = Request.Builder().url("$DRIVE_FILES/${remote.id}?alt=media")
             .header("Authorization", "Bearer $accessToken").get().build()
         http.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw IOException("Google Drive download failed (${response.code})")
+            if (!response.isSuccessful) throw IOException(GoogleDriveApiError.describe("download", response.code, response.body?.string()))
             val body = response.body ?: throw IOException("Google Drive returned an empty response")
             val bytes = body.bytes()
             if (bytes.isEmpty() || bytes.size > GoogleDriveSyncPolicy.MAX_ENVELOPE_BYTES) {
@@ -150,7 +151,7 @@ class GoogleDriveSyncTransport(
             .build()
         val request = Request.Builder().url(url).header("Authorization", "Bearer $token").get().build()
         http.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw IOException("Google Drive lookup failed (${response.code})")
+            if (!response.isSuccessful) throw IOException(GoogleDriveApiError.describe("lookup", response.code, response.body?.string()))
             val files = JSONObject(response.body?.string().orEmpty()).optJSONArray("files") ?: return null
             if (files.length() > 1) throw IOException("Duplicate sync change identifiers found in Google Drive")
             if (files.length() == 0) return null

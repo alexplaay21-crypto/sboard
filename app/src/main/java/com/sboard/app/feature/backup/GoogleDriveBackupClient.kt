@@ -17,6 +17,7 @@ import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
+import com.sboard.app.feature.drive.GoogleDriveApiError
 import kotlinx.coroutines.withContext
 
 /**
@@ -368,19 +369,8 @@ class GoogleDriveBackupClient(
     }
 
     private fun driveError(message: String, status: Int, responseBody: String? = null): Exception {
-        val errorObject = runCatching {
-            JSONObject(responseBody.orEmpty()).optJSONObject("error")
-        }.getOrNull()
-        val reason = errorObject?.optJSONArray("errors")?.optJSONObject(0)?.optString("reason")
-            ?.ifBlank { null } ?: errorObject?.optString("status")?.ifBlank { null }
-        val apiMessage = errorObject?.optString("message")?.trim()?.take(240)?.ifBlank { null }
-        val diagnostic = when (reason) {
-            "accessNotConfigured", "SERVICE_DISABLED" -> tr("Google Drive API выключен в проекте Google Cloud. Включите Drive API и повторите подключение.")
-            "insufficientPermissions" -> tr("Google не выдал доступ к папке приложения. Отключите и подключите Google Drive заново, подтвердив разрешение.")
-            else -> apiMessage?.let { " $it" }.orEmpty()
-        }
-        val details = "$message (HTTP $status${reason?.let { ", $it"}.orEmpty()}).$diagnostic"
-        return if (status == 401 || status == 403) SecurityException(details) else IOException(details)
+        val diagnostic = GoogleDriveApiError.describe(message, status, responseBody)
+        return if (status == 401 || status == 403) SecurityException(diagnostic) else IOException(diagnostic)
     }
 
     data class DriveBackupFile(

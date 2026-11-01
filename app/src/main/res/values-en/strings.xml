@@ -15,4 +15,7 @@
     <string name="ime_no_speech_result">No speech was recognized</string>
     <string name="autofill_service_name">sBoard Autofill</string>
     <string name="ime_paste_from_clipboard">Paste from clipboard</string>
+    <string name="ime_symbols">Symbols</string>
+    <string name="ime_emoji">Emoji</string>
+    <string name="ime_hide_keyboard">Hide keyboard</string>
 </resources>

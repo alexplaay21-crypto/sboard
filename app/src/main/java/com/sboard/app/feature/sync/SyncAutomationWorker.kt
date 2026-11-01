@@ -7,18 +7,29 @@ import androidx.work.WorkerParameters
 /** Never stores a Vault key or OAuth token in WorkManager input/output data. */
 class SyncAutomationWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
-        val executor = SyncAutomationRuntime.executor ?: return Result.failure()
+        val status = SyncAutomationStatusStore(applicationContext)
+        val executor = SyncAutomationRuntime.executor ?: run {
+            status.failure("Google Drive sync executor is not configured")
+            return Result.failure()
+        }
+        status.started()
         return try {
             when (executor.synchronize(applicationContext)) {
-                SyncAutomationResult.SUCCESS -> Result.success()
-                SyncAutomationResult.RETRY -> Result.retry()
-                SyncAutomationResult.NEEDS_UNLOCK_OR_AUTH -> Result.success()
+                SyncAutomationResult.SUCCESS -> { status.success(); Result.success() }
+                SyncAutomationResult.RETRY -> { status.failure("Temporary sync failure; WorkManager will retry"); Result.retry() }
+                SyncAutomationResult.NEEDS_UNLOCK_OR_AUTH -> {
+                    status.attention("Unlock the sBoard Vault and reconnect Google Drive if authorization was revoked")
+                    Result.success()
+                }
             }
-        } catch (_: SecurityException) {
+        } catch (error: SecurityException) {
+            status.attention(error.message ?: "Google Drive authorization needs attention")
             Result.success()
-        } catch (_: IllegalArgumentException) {
+        } catch (error: IllegalArgumentException) {
+            status.failure(error.message ?: "Invalid Google Drive sync configuration")
             Result.failure()
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            status.failure(error.message ?: "Temporary Google Drive sync failure; WorkManager will retry")
             Result.retry()
         }
     }
