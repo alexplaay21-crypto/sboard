@@ -158,7 +158,7 @@ class SBoardInputMethodService : InputMethodService() {
                 contentDescription = getString(com.sboard.app.R.string.ime_paste_from_clipboard)
             }, weightParams(1f))
         }
-        top.addView(makeKey("•••", KeyStyle.TOOL) { showToolbarMenu(it) }, weightParams(1f))
+        top.addView(makeKey("•••", KeyStyle.TOOL) { showToolbarMenu(root) }, weightParams(1f))
         root.addView(top)
         if (spellingSuggestions.isNotEmpty() && !isPasswordField) {
             val candidates = LinearLayout(this).apply {
@@ -304,7 +304,7 @@ class SBoardInputMethodService : InputMethodService() {
             typeface = Typeface.create("sans-serif", Typeface.NORMAL)
             gravity = Gravity.CENTER
             includeFontPadding = false
-            isImportantForAccessibility = false
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }
         cell.addView(alt, FrameLayout.LayoutParams(-1, dp(15), Gravity.TOP or Gravity.CENTER_HORIZONTAL))
         cell.addView(main, FrameLayout.LayoutParams(-1, -1).apply { topMargin = dp(5) })
