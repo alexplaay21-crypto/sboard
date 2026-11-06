@@ -31,6 +31,8 @@ class SBoardApplication : FlorisApplication() {
         AutoLock.install(this)
         VaultRepository.get(this) // starts the decrypted item flow (empty while locked)
         SBoardVaultBridge.provider = KeyboardVaultProviderImpl(this)
+        SBoardVaultBridge.translator = com.sboard.app.feature.keyboard.KeyboardTranslatorImpl(this)
+        appScope.launch { runCatching { org.sboard.keyboard.SBoardKeyboardSettings.migrateToSamsungStyle(this@SBoardApplication) } }
         SyncScheduler.ensurePeriodic(this)
         // Every unlock (app, autofill, keyboard, passkey) triggers a sync of pending changes.
         appScope.launch {

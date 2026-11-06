@@ -2,7 +2,7 @@
   "$": "ime.extension.theme",
   "meta": {
     "id": "org.sboard.themes",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "title": "sBoard keyboard themes",
     "description": "sBoard light and dark themes, adapted from FlorisBoard v0.5.2 theme stylesheets under Apache-2.0.",
     "maintainers": [
@@ -12,6 +12,14 @@
   },
   "themes": [
     {
+      "id": "sboard_dark",
+      "label": "sBoard Graphite",
+      "authors": [
+        "sBoard contributors"
+      ],
+      "isNight": true
+    },
+    {
       "id": "sboard_light",
       "label": "sBoard Light",
       "authors": [
@@ -20,8 +28,72 @@
       "isNight": false
     },
     {
-      "id": "sboard_dark",
-      "label": "sBoard Dark",
+      "id": "sboard_amoled",
+      "label": "AMOLED Black",
+      "authors": [
+        "sBoard contributors"
+      ],
+      "isNight": true
+    },
+    {
+      "id": "sboard_outline_blue",
+      "label": "Neon Outline",
+      "authors": [
+        "sBoard contributors"
+      ],
+      "isNight": true
+    },
+    {
+      "id": "sboard_outline_gold",
+      "label": "Gold Outline",
+      "authors": [
+        "sBoard contributors"
+      ],
+      "isNight": true
+    },
+    {
+      "id": "sboard_ocean",
+      "label": "Ocean",
+      "authors": [
+        "sBoard contributors"
+      ],
+      "isNight": true
+    },
+    {
+      "id": "sboard_forest",
+      "label": "Forest",
+      "authors": [
+        "sBoard contributors"
+      ],
+      "isNight": true
+    },
+    {
+      "id": "sboard_rose",
+      "label": "Rose",
+      "authors": [
+        "sBoard contributors"
+      ],
+      "isNight": false
+    },
+    {
+      "id": "sboard_minimal_light",
+      "label": "Minimal Light",
+      "authors": [
+        "sBoard contributors"
+      ],
+      "isNight": false
+    },
+    {
+      "id": "sboard_minimal_dark",
+      "label": "Minimal Dark",
+      "authors": [
+        "sBoard contributors"
+      ],
+      "isNight": true
+    },
+    {
+      "id": "sboard_contrast",
+      "label": "High Contrast",
       "authors": [
         "sBoard contributors"
       ],

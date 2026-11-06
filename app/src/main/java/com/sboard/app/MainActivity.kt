@@ -22,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import com.sboard.app.core.security.VaultSessionProvider
 import com.sboard.app.feature.sync.SyncScheduler
@@ -39,7 +40,22 @@ import kotlinx.coroutines.launch
 class MainActivity : SecureActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        handleIntent(intent)
         setContent { SBoardTheme { AppRoot() } }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    /** The keyboard's settings key opens sBoard directly on the Keyboard tab. */
+    private fun handleIntent(intent: android.content.Intent?) {
+        if (intent?.getStringExtra("sboard.open_tab") == "keyboard") pendingTab.value = Tab.KEYBOARD
+    }
+
+    companion object {
+        val pendingTab = mutableStateOf<Tab?>(null)
     }
 
     override fun onStart() {
@@ -55,11 +71,19 @@ private fun AppRoot() {
     val unlocked by VaultSessionProvider.session.unlocked.collectAsState()
     // null = loading, true = first run (no Vault on this device yet), false = Vault exists.
     var onboarding by remember { mutableStateOf<Boolean?>(null) }
-    LaunchedEffect(Unit) { onboarding = !VaultKeyManager(context).hasVault() }
+    var startupError by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        runCatching { VaultKeyManager(context).hasVault() }
+            .onSuccess { onboarding = !it }
+            .onFailure { startupError = it.message ?: it.javaClass.simpleName }
+    }
     val navigator = remember { Navigator() }
 
     Box(Modifier.fillMaxSize().background(palette.background)) {
         when {
+            startupError != null -> Box(Modifier.fillMaxSize().systemBarsPadding().padding(24.dp), contentAlignment = Alignment.Center) {
+                com.sboard.app.ui.components.Banner(com.sboard.app.core.i18n.tr("Не удалось открыть хранилище: {0}", startupError), com.sboard.app.ui.components.Tone.DANGER)
+            }
             onboarding == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = palette.accent) }
             onboarding == true -> OnboardingFlow(onFinished = { onboarding = false })
             !unlocked -> Box(Modifier.fillMaxSize().systemBarsPadding(), contentAlignment = Alignment.Center) {
@@ -72,6 +96,8 @@ private fun AppRoot() {
 
 @Composable
 private fun MainShell(nav: Navigator) {
+    val requested by MainActivity.pendingTab
+    LaunchedEffect(requested) { requested?.let { nav.select(it); MainActivity.pendingTab.value = null } }
     BackHandler(enabled = nav.stack.isNotEmpty() || nav.tab != Tab.HOME) {
         if (!nav.pop()) nav.select(Tab.HOME)
     }

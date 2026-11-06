@@ -22,7 +22,10 @@
 - `res/values/strings.xml` and `res/values-ru/strings.xml`: label the integrated host app as sBoard; upstream attribution remains in its About screen and this notice.
 - `lib/snygg/build.gradle.kts`: decouples schema generation from consumer builds; the checked-in schema remains.
 - `ImeUiMode.kt`, `KeyCode.kt`, `TextKeyData.kt`, `KeyboardManager.kt`, `ComputingEvaluator.kt`, `PopupUiController.kt`, `QuickAction.kt`, `QuickActionArrangement.kt`, `FlorisImeService.kt`: add the sBoard Pass Vault panel (`ImeUiMode.VAULT`, key code `-214`) as the default sticky Smart Bar action and commit values approved in the sBoard confirmation activity.
-- `AppPrefs.kt`: word suggestions are enabled by default.
+- `AppPrefs.kt`: Samsung-Keyboard-like defaults — word suggestions, swipe typing, number row, symbol hints with hint priority, no fullscreen editor in landscape, lower landscape height.
+- `layouts/charactersMod|symbolsMod|symbols2Mod/default.json`, `ComputingEvaluator.kt`, `FlorisApplication.kt`: Samsung-style bottom row (`!#1`, globe, comma, space, period, enter), `!#1`/`1/2`/`2/2`/`АБВ` labels and `western_samsung` symbol pages for new and migrated subtypes.
+- `ImeUiMode.kt`, `KeyCode.kt` (`-215`), `TextKeyData.kt` and related files: translator panel (`org.sboard.keyboard.TranslateInputLayout`); toolbar order modelled on Samsung Keyboard; the settings key opens the sBoard app.
+- `assets/ime/theme/org.sboard.themes/**`: eleven sBoard keyboard themes (graphite, light, AMOLED, outline, colour and high-contrast variants).
 - sBoard-owned keyboard code lives outside the vendored tree in `keyboard/floris/src/main/kotlin/org/sboard/keyboard/`.
 - `lib/snygg/src/test/.../TestColorSchemes.kt`: supplies the missing test-only color scheme fixture referenced by the upstream tests; it is not packaged in the application.
 
@@ -32,7 +35,8 @@ FlorisBoard sources and bundled assets are subject to the license notices shippe
 
 | Component | License | Use |
 |---|---|---|
-| BouncyCastle `bcprov-jdk18on` | MIT | Argon2id key derivation |
+| BouncyCastle `bcprov-jdk18on` | MIT | Argon2id key derivation (fallback) |
+| argon2kt (libargon2) | MIT / CC0 + Apache-2.0 | Fast native Argon2id |
 | ZXing core + `zxing-android-embedded` (JourneyApps) | Apache-2.0 | Offline QR scanner for 2FA codes |
 | zxcvbn4j (`com.nulab-inc:zxcvbn`) | MIT | Offline password strength estimation |
 | OkHttp | Apache-2.0 | Google Drive REST, Digital Asset Links, translator |

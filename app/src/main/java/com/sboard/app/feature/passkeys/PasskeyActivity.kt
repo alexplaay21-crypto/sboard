@@ -89,6 +89,30 @@ class PasskeyActivity : SecureActivity() {
                                 busy = false
                             }
                         }
+                        MODE_CREATE_PASSWORD -> ConfirmCard(
+                            title = tr("Сохранить пароль?"),
+                            text = describeCreatePassword(),
+                            action = tr("Сохранить"), busy = busy, error = error,
+                            onCancel = { cancelCreate() },
+                        ) {
+                            lifecycleScope.launch {
+                                busy = true; error = null
+                                error = runCatching { completeCreatePassword() }.exceptionOrNull()?.message
+                                busy = false
+                            }
+                        }
+                        MODE_GET_PASSWORD -> ConfirmCard(
+                            title = tr("Вход с паролем из sBoard"),
+                            text = describeGetPassword(itemId),
+                            action = tr("Войти"), busy = busy, error = error,
+                            onCancel = { cancelGet() },
+                        ) {
+                            lifecycleScope.launch {
+                                busy = true; error = null
+                                error = runCatching { completeGetPassword(itemId!!, verifiedByUnlock) }.exceptionOrNull()?.message
+                                busy = false
+                            }
+                        }
                         else -> LaunchedEffect(Unit) { finish() }
                     }
                 }
@@ -171,6 +195,60 @@ class PasskeyActivity : SecureActivity() {
         finish()
     }
 
+    private fun callerLabel(pkg: String?): String = pkg?.let {
+        runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(it, 0)).toString() }.getOrDefault(it)
+    }.orEmpty()
+
+    private fun describeCreatePassword(): String {
+        val request = PendingIntentHandler.retrieveProviderCreateCredentialRequest(intent) ?: return tr("Неверный запрос")
+        val create = request.callingRequest as? androidx.credentials.CreatePasswordRequest ?: return tr("Неверный запрос")
+        return tr("Сохранить пароль для {0} ({1}) в хранилище sBoard?", callerLabel(request.callingAppInfo.packageName), create.id)
+    }
+
+    private fun describeGetPassword(itemId: String?): String {
+        val item = VaultRepository.get(this).items.value.firstOrNull { it.id == itemId } ?: return tr("Подтвердите вход")
+        return tr("Войти как {0}?", item.payload.login?.username.orEmpty().ifBlank { item.title })
+    }
+
+    private suspend fun completeCreatePassword() {
+        val request = PendingIntentHandler.retrieveProviderCreateCredentialRequest(intent) ?: throw IllegalStateException(tr("Неверный запрос"))
+        val create = request.callingRequest as? androidx.credentials.CreatePasswordRequest ?: throw IllegalStateException(tr("Неверный запрос"))
+        val caller = request.callingAppInfo
+        val originHost = runCatching { caller.getOrigin(PrivilegedApps.allowlist(this)) }.getOrNull()
+            ?.let { com.sboard.app.data.DomainMatcher.hostOf(it) }
+        val pkg = caller.packageName.takeIf { originHost == null }
+        val repo = VaultRepository.get(this)
+        val existing = repo.snapshot().firstOrNull { item ->
+            val l = item.payload.login ?: return@firstOrNull false
+            l.username.equals(create.id, true) && ((pkg != null && pkg in l.packageNames) ||
+                (originHost != null && l.urls.any { com.sboard.app.data.DomainMatcher.matches(it, originHost) }))
+        }
+        if (existing != null) {
+            repo.save(existing.id, existing.payload.copy(login = existing.payload.login!!.copy(password = create.password, passwordChangedAt = System.currentTimeMillis())))
+        } else {
+            repo.save(null, com.sboard.app.data.VaultItemPayload(
+                type = com.sboard.app.data.ItemType.LOGIN,
+                title = originHost ?: callerLabel(pkg).ifBlank { create.id },
+                login = com.sboard.app.data.LoginData(username = create.id, password = create.password,
+                    urls = listOfNotNull(originHost), packageNames = listOfNotNull(pkg), passwordChangedAt = System.currentTimeMillis()),
+            ))
+        }
+        val result = Intent()
+        PendingIntentHandler.setCreateCredentialResponse(result, androidx.credentials.CreatePasswordResponse())
+        setResult(Activity.RESULT_OK, result)
+        finish()
+    }
+
+    private suspend fun completeGetPassword(itemId: String, alreadyVerified: Boolean) {
+        val item = VaultRepository.get(this).get(itemId) ?: throw IllegalStateException(tr("Запись не найдена"))
+        val login = item.payload.login ?: throw IllegalStateException(tr("Запись не найдена"))
+        if (!verifyUser(alreadyVerified)) return
+        val result = Intent()
+        PendingIntentHandler.setGetCredentialResponse(result, GetCredentialResponse(androidx.credentials.PasswordCredential(login.username, login.password)))
+        setResult(Activity.RESULT_OK, result)
+        finish()
+    }
+
     private suspend fun finishUnlock() {
         val begin = PendingIntentHandler.retrieveBeginGetCredentialRequest(intent)
         val result = Intent()
@@ -205,5 +283,7 @@ class PasskeyActivity : SecureActivity() {
         const val MODE_UNLOCK = "unlock"
         const val MODE_GET = "get"
         const val MODE_CREATE = "create"
+        const val MODE_CREATE_PASSWORD = "create_password"
+        const val MODE_GET_PASSWORD = "get_password"
     }
 }

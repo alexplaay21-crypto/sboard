@@ -62,7 +62,40 @@ data class KdfParams(val memoryKiB: Int, val iterations: Int, val parallelism: I
 object Argon2Kdf {
     const val SALT_BYTES = 16
 
+    /**
+     * Native libargon2 (argon2kt) is ~5–10× faster than the pure-Java implementation on phones,
+     * which keeps 64 MiB / t=3 unlocks around a second. Both produce identical RFC 9106 output;
+     * the Java implementation is the fallback (JVM unit tests, devices without the native lib).
+     */
     fun derive(secret: ByteArray, salt: ByteArray, params: KdfParams, length: Int = 32): ByteArray {
+        params.validate()
+        require(salt.size >= SALT_BYTES) { "Salt too short" }
+        nativeDerive(secret, salt, params, length)?.let { return it }
+        return deriveJava(secret, salt, params, length)
+    }
+
+    @Volatile private var nativeUnavailable = false
+
+    private fun nativeDerive(secret: ByteArray, salt: ByteArray, params: KdfParams, length: Int): ByteArray? {
+        if (nativeUnavailable) return null
+        return try {
+            com.lambdapioneer.argon2kt.Argon2Kt().hash(
+                mode = com.lambdapioneer.argon2kt.Argon2Mode.ARGON2_ID,
+                password = secret,
+                salt = salt,
+                tCostInIterations = params.iterations,
+                mCostInKibibyte = params.memoryKiB,
+                parallelism = params.parallelism,
+                hashLengthInBytes = length,
+            ).rawHashAsByteArray()
+        } catch (_: Throwable) {
+            nativeUnavailable = true
+            null
+        }
+    }
+
+    /** Pure-Java Argon2id (BouncyCastle). */
+    fun deriveJava(secret: ByteArray, salt: ByteArray, params: KdfParams, length: Int = 32): ByteArray {
         params.validate()
         require(salt.size >= SALT_BYTES) { "Salt too short" }
         val parameters = Argon2Parameters.Builder(Argon2Parameters.ARGON2_id)

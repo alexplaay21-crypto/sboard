@@ -341,7 +341,7 @@ abstract class FlorisPreferenceModel : PreferenceModel() {
     inner class Glide {
         val enabled = boolean(
             key = "glide__enabled",
-            default = false,
+            default = true // Modified for sBoard: swipe typing on by default,
         )
         val showTrail = boolean(
             key = "glide__show_trail",
@@ -474,11 +474,11 @@ abstract class FlorisPreferenceModel : PreferenceModel() {
     inner class Keyboard {
         val numberRow = boolean(
             key = "keyboard__number_row",
-            default = false,
+            default = true // Modified for sBoard: number row like Samsung Keyboard,
         )
         val hintedNumberRowEnabled = boolean(
             key = "keyboard__hinted_number_row_enabled",
-            default = true,
+            default = false,
         )
         val hintedNumberRowMode = enum(
             key = "keyboard__hinted_number_row_mode",
@@ -490,7 +490,7 @@ abstract class FlorisPreferenceModel : PreferenceModel() {
         )
         val hintedSymbolsMode = enum(
             key = "keyboard__hinted_symbols_mode",
-            default = KeyHintMode.SMART_PRIORITY,
+            default = KeyHintMode.HINT_PRIORITY,
         )
         val utilityKeyEnabled = boolean(
             key = "keyboard__utility_key_enabled",
@@ -530,7 +530,7 @@ abstract class FlorisPreferenceModel : PreferenceModel() {
         )
         val landscapeInputUiMode = enum(
             key = "keyboard__landscape_input_ui_mode",
-            default = LandscapeInputUiMode.DYNAMICALLY_SHOW,
+            default = LandscapeInputUiMode.NEVER_SHOW // Modified for sBoard: no fullscreen editor in landscape/games,
         )
         val heightFactorPortrait = int(
             key = "keyboard__height_factor_portrait",
@@ -538,7 +538,7 @@ abstract class FlorisPreferenceModel : PreferenceModel() {
         )
         val heightFactorLandscape = int(
             key = "keyboard__height_factor_landscape",
-            default = 100,
+            default = 78,
         )
         val keySpacingVertical = float(
             key = "keyboard__key_spacing_vertical",

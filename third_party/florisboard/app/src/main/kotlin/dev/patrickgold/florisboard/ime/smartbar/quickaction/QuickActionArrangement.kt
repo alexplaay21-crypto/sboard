@@ -65,33 +65,34 @@ data class QuickActionArrangement(
     }
 
     companion object {
+        // Modified for sBoard: toolbar modelled on Samsung Keyboard (emoji, Pass, clipboard,
+        // translate, voice, one-handed mode, editing) with sBoard Pass always visible.
         val Default = QuickActionArrangement(
-            // Modified for sBoard: the Vault panel is the primary Smart Bar action.
             stickyAction = QuickAction.InsertKey(TextKeyData.IME_UI_MODE_VAULT),
             dynamicActions = listOf(
+                QuickAction.InsertKey(TextKeyData.IME_UI_MODE_MEDIA),
+                QuickAction.InsertKey(TextKeyData.IME_UI_MODE_CLIPBOARD),
+                QuickAction.InsertKey(TextKeyData.IME_UI_MODE_TRANSLATE),
                 QuickAction.InsertKey(TextKeyData.VOICE_INPUT),
+                QuickAction.InsertKey(TextKeyData.TOGGLE_COMPACT_LAYOUT),
+                QuickAction.InsertKey(TextKeyData.CLIPBOARD_SELECT_ALL),
                 QuickAction.InsertKey(TextKeyData.UNDO),
                 QuickAction.InsertKey(TextKeyData.REDO),
+                QuickAction.InsertKey(TextKeyData.ARROW_LEFT),
+                QuickAction.InsertKey(TextKeyData.ARROW_RIGHT),
                 QuickAction.InsertKey(TextKeyData.SETTINGS),
+            ),
+            hiddenActions = listOf(
                 QuickAction.InsertKey(TextKeyData.TOGGLE_INCOGNITO_MODE),
-                QuickAction.InsertKey(TextKeyData.IME_UI_MODE_CLIPBOARD),
-                QuickAction.InsertKey(TextKeyData.IME_UI_MODE_MEDIA),
-                QuickAction.InsertKey(TextKeyData.TOGGLE_COMPACT_LAYOUT),
                 QuickAction.InsertKey(TextKeyData.TOGGLE_AUTOCORRECT),
                 QuickAction.InsertKey(TextKeyData.ARROW_UP),
                 QuickAction.InsertKey(TextKeyData.ARROW_DOWN),
-                QuickAction.InsertKey(TextKeyData.ARROW_LEFT),
-                QuickAction.InsertKey(TextKeyData.ARROW_RIGHT),
-                QuickAction.InsertKey(TextKeyData.CLIPBOARD_CLEAR_PRIMARY_CLIP),
                 QuickAction.InsertKey(TextKeyData.CLIPBOARD_COPY),
                 QuickAction.InsertKey(TextKeyData.CLIPBOARD_CUT),
                 QuickAction.InsertKey(TextKeyData.CLIPBOARD_PASTE),
-                QuickAction.InsertKey(TextKeyData.CLIPBOARD_SELECT_ALL),
+                QuickAction.InsertKey(TextKeyData.CLIPBOARD_CLEAR_PRIMARY_CLIP),
                 QuickAction.InsertKey(TextKeyData.LANGUAGE_SWITCH),
-                QuickAction.InsertKey(TextKeyData.FORWARD_DELETE),
                 QuickAction.InsertKey(TextKeyData.IME_HIDE_UI),
-            ),
-            hiddenActions = listOf(
             ),
         )
     }

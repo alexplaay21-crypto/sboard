@@ -1,19 +1,24 @@
 package com.sboard.app.ui.screens
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.*
 import androidx.compose.material.icons.automirrored.rounded.*
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Text
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -24,15 +29,54 @@ import com.sboard.app.feature.keyboard.SystemIntegration
 import com.sboard.app.ui.components.*
 import com.sboard.app.ui.theme.palette
 import kotlinx.coroutines.launch
-import org.sboard.keyboard.SBoardKeyboardSettings
+import org.sboard.keyboard.SBoardKeyboardSettings as K
 
-private fun openKeyboardEngineSettings(context: Context, path: String) {
-    val intent = Intent(context, dev.patrickgold.florisboard.app.FlorisAppActivity::class.java).apply {
-        action = Intent.ACTION_VIEW
-        data = Uri.parse("ui://florisboard/$path")
-        addCategory(Intent.CATEGORY_BROWSABLE)
+/** Preview colours for the bundled keyboard themes: background, key, accent. */
+private val themeSwatches = mapOf(
+    "sboard_dark" to Triple(0xFF0C0C0E, 0xFF222226, 0xFFD7B978), "sboard_light" to Triple(0xFFF1F0EC, 0xFFFFFFFF, 0xFFA58A27),
+    "sboard_amoled" to Triple(0xFF000000, 0xFF141414, 0xFFD7B978), "sboard_outline_blue" to Triple(0xFF000000, 0xFF000000, 0xFF3D5AFE),
+    "sboard_outline_gold" to Triple(0xFF000000, 0xFF050505, 0xFFD5B94B), "sboard_ocean" to Triple(0xFF0B1620, 0xFF16283A, 0xFF4FC3F7),
+    "sboard_forest" to Triple(0xFF0E1610, 0xFF1B2B1F, 0xFF81C784), "sboard_rose" to Triple(0xFFFCEFF3, 0xFFFFFFFF, 0xFFE57399),
+    "sboard_minimal_light" to Triple(0xFFF1F0EC, 0xFFF1F0EC, 0xFFA58A27), "sboard_minimal_dark" to Triple(0xFF0C0C0E, 0xFF0C0C0E, 0xFFD7B978),
+    "sboard_contrast" to Triple(0xFF000000, 0xFF000000, 0xFFFFFF00),
+)
+
+@Composable
+private fun ThemePicker(title: String, selected: String, onSelect: (String) -> Unit) {
+    Text(title, style = MaterialTheme.typography.titleSmall, color = palette.text)
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        items(K.themes, key = { it.first }) { (id, label) ->
+            val (bg, key, accent) = themeSwatches[id] ?: Triple(0xFF222222, 0xFF444444, 0xFFD5B94B)
+            val active = id == selected
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(76.dp).clickable { onSelect(id) }) {
+                Box(Modifier.size(width = 72.dp, height = 50.dp).clip(RoundedCornerShape(12.dp)).background(Color(bg))
+                    .border(BorderStroke(if (active) 2.dp else 1.dp, if (active) palette.accent else palette.outline), RoundedCornerShape(12.dp))
+                    .padding(6.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        repeat(3) { row ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                                repeat(4) { col ->
+                                    val isAccent = row == 2 && col == 3
+                                    Box(Modifier.size(width = 12.dp, height = 8.dp).clip(RoundedCornerShape(2.dp))
+                                        .background(if (isAccent) Color(accent) else Color(key))
+                                        .border(BorderStroke(0.5.dp, if (id.contains("outline") || id == "sboard_contrast") Color(accent) else Color.Transparent), RoundedCornerShape(2.dp)))
+                                }
+                            }
+                        }
+                    }
+                }
+                Text(label, style = MaterialTheme.typography.labelSmall, color = if (active) palette.accent else palette.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
     }
-    runCatching { context.startActivity(intent) }
+}
+
+@Composable
+private fun SliderRow(title: String, value: Float, range: ClosedFloatingPointRange<Float>, label: (Float) -> String, onFinished: (Float) -> Unit) {
+    var v by remember(value) { mutableFloatStateOf(value) }
+    Text("$title: ${label(v)}", style = MaterialTheme.typography.titleSmall, color = palette.text)
+    Slider(v, { v = it }, valueRange = range, onValueChangeFinished = { onFinished(v) },
+        colors = SliderDefaults.colors(thumbColor = palette.accent, activeTrackColor = palette.accent))
 }
 
 @Composable
@@ -41,23 +85,37 @@ fun KeyboardScreen() {
     val scope = rememberCoroutineScope()
     var enabled by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf(false) }
+    var languages by remember { mutableStateOf<List<K.Language>>(emptyList()) }
+    var showAllLanguages by remember { mutableStateOf(false) }
     val lifecycle = LocalLifecycleOwner.current
     LaunchedEffect(lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             enabled = SystemIntegration.isKeyboardEnabled(context)
             selected = SystemIntegration.isKeyboardSelected(context)
+            languages = runCatching { K.languages(context) }.getOrDefault(emptyList())
         }
     }
-    var theme by remember { mutableStateOf(runCatching { SBoardKeyboardSettings.theme() }.getOrDefault("system")) }
-    var height by remember { mutableFloatStateOf(runCatching { SBoardKeyboardSettings.heightPercent() }.getOrDefault(100).toFloat()) }
-    var sound by remember { mutableStateOf(runCatching { SBoardKeyboardSettings.soundEnabled() }.getOrDefault(true)) }
-    var volume by remember { mutableFloatStateOf(runCatching { SBoardKeyboardSettings.soundVolume() }.getOrDefault(50).toFloat()) }
-    var vibration by remember { mutableStateOf(runCatching { SBoardKeyboardSettings.vibrationEnabled() }.getOrDefault(true)) }
-    var numberRow by remember { mutableStateOf(runCatching { SBoardKeyboardSettings.numberRow() }.getOrDefault(false)) }
-    var suggestions by remember { mutableStateOf(runCatching { SBoardKeyboardSettings.suggestions() }.getOrDefault(true)) }
-    var smartbar by remember { mutableStateOf(runCatching { SBoardKeyboardSettings.smartbar() }.getOrDefault(true)) }
-    var oneHanded by remember { mutableStateOf(runCatching { SBoardKeyboardSettings.oneHanded() }.getOrDefault(false)) }
+    fun <T> pref(get: () -> T, default: T) = runCatching(get).getOrDefault(default)
+    var themeMode by remember { mutableStateOf(pref(K::theme, "system")) }
+    var dayTheme by remember { mutableStateOf(pref(K::dayTheme, "sboard_light")) }
+    var nightTheme by remember { mutableStateOf(pref(K::nightTheme, "sboard_dark")) }
+    var sound by remember { mutableStateOf(pref(K::soundEnabled, true)) }
+    var vibration by remember { mutableStateOf(pref(K::vibrationEnabled, true)) }
+    var numberRow by remember { mutableStateOf(pref(K::numberRow, true)) }
+    var symbolHints by remember { mutableStateOf(pref(K::symbolHints, true)) }
+    var suggestions by remember { mutableStateOf(pref(K::suggestions, true)) }
+    var swipe by remember { mutableStateOf(pref(K::swipeTyping, true)) }
+    var swipeTrail by remember { mutableStateOf(pref(K::swipeTrail, true)) }
+    var autoCaps by remember { mutableStateOf(pref(K::autoCapitalization, true)) }
+    var doubleSpace by remember { mutableStateOf(pref(K::doubleSpacePeriod, true)) }
+    var autoSpace by remember { mutableStateOf(pref(K::autoSpacePunctuation, false)) }
+    var keyPopup by remember { mutableStateOf(pref(K::keyPopup, true)) }
+    var emojiSuggest by remember { mutableStateOf(pref(K::emojiSuggestions, true)) }
+    var clipHistory by remember { mutableStateOf(pref(K::clipboardHistory, true)) }
+    var smartbar by remember { mutableStateOf(pref(K::smartbar, true)) }
+    var oneHanded by remember { mutableStateOf(pref(K::oneHanded, false)) }
     var test by remember { mutableStateOf("") }
+    var message by remember { mutableStateOf<String?>(null) }
 
     ScreenList(Modifier.statusBarsPadding().imePadding()) {
         item { ScreenHeader(tr("Клавиатура"), tr("Скорость, точность и удобство")) }
@@ -71,57 +129,84 @@ fun KeyboardScreen() {
             }
         }
         item { SBTextField(test, { test = it }, tr("Попробуйте клавиатуру здесь"), singleLine = false, minLines = 2) }
-        item { SectionTitle(tr("Внешний вид")) }
+        message?.let { item { Banner(it, Tone.INFO) } }
+
+        item { SectionTitle(tr("Языки и раскладки")) }
+        item {
+            SBCard(padding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)) {
+                val visible = if (showAllLanguages) languages else languages.filter { it.enabled }
+                if (languages.isEmpty()) Text(tr("Список языков появится после первого запуска клавиатуры."), style = MaterialTheme.typography.bodySmall, color = palette.textMuted)
+                visible.forEach { lang ->
+                    SwitchRow(lang.name, lang.tag, lang.enabled, Icons.Rounded.Language) { on ->
+                        if (!K.setLanguageEnabled(context, lang.tag, on)) message = tr("Должен остаться хотя бы один язык")
+                        else message = null
+                        languages = runCatching { K.languages(context) }.getOrDefault(languages)
+                    }
+                }
+                TextButton(onClick = { showAllLanguages = !showAllLanguages }) {
+                    Text(if (showAllLanguages) tr("Показать только включённые") else tr("Добавить язык"), color = palette.accent)
+                }
+                Text(tr("Переключение языка — кнопка с глобусом или свайп по пробелу."), style = MaterialTheme.typography.bodySmall, color = palette.textFaint)
+            }
+        }
+
+        item { SectionTitle(tr("Стиль и тема")) }
         item {
             SBCard {
-                Text(tr("Тема клавиатуры"), style = MaterialTheme.typography.titleSmall, color = palette.text)
-                SegmentedControl(listOf("system" to tr("Системная"), "light" to tr("Светлая"), "dark" to tr("Тёмная")), theme, {
-                    theme = it; scope.launch { SBoardKeyboardSettings.setTheme(it) }
+                SegmentedControl(listOf("system" to tr("Системная"), "light" to tr("Светлая"), "dark" to tr("Тёмная")), themeMode, {
+                    themeMode = it; scope.launch { K.setTheme(it) }
                 })
-                Text(tr("Высота клавиатуры: {0}%", height.toInt()), style = MaterialTheme.typography.titleSmall, color = palette.text)
-                Slider(height, { height = it }, valueRange = 70f..140f, steps = 13,
-                    onValueChangeFinished = { scope.launch { SBoardKeyboardSettings.setHeightPercent(height.toInt()) } },
-                    colors = SliderDefaults.colors(thumbColor = palette.accent, activeTrackColor = palette.accent))
-                SwitchRow(tr("Ряд цифр"), tr("Отдельный верхний ряд с цифрами"), numberRow, Icons.Rounded.Pin) { numberRow = it; scope.launch { SBoardKeyboardSettings.setNumberRow(it) } }
-                SwitchRow(tr("Режим одной руки"), null, oneHanded, Icons.Rounded.PanTool) { oneHanded = it; scope.launch { SBoardKeyboardSettings.setOneHanded(it) } }
+                if (themeMode != "dark") ThemePicker(tr("Светлая тема"), dayTheme) { dayTheme = it; scope.launch { K.setDayTheme(it) } }
+                if (themeMode != "light") ThemePicker(tr("Тёмная тема"), nightTheme) { nightTheme = it; scope.launch { K.setNightTheme(it) } }
+                SliderRow(tr("Размер шрифта"), pref(K::fontSizePercent, 100).toFloat(), 70f..140f, { "${it.toInt()}%" }) { scope.launch { K.setFontSizePercent(it.toInt()) } }
+                SliderRow(tr("Расстояние между клавишами"), pref(K::keySpacing, 2f), 0f..6f, { "%.1f".format(it) }) { scope.launch { K.setKeySpacing(it) } }
             }
         }
-        item { SectionTitle(tr("Звук и вибрация")) }
+
+        item { SectionTitle(tr("Размер и раскладка")) }
         item {
             SBCard {
-                SwitchRow(tr("Звук клавиш"), null, sound, Icons.AutoMirrored.Rounded.VolumeUp) { sound = it; scope.launch { SBoardKeyboardSettings.setSoundEnabled(it) } }
-                if (sound) Slider(volume, { volume = it }, valueRange = 1f..100f,
-                    onValueChangeFinished = { scope.launch { SBoardKeyboardSettings.setSoundVolume(volume.toInt()) } },
-                    colors = SliderDefaults.colors(thumbColor = palette.accent, activeTrackColor = palette.accent))
-                SwitchRow(tr("Вибрация клавиш"), null, vibration, Icons.Rounded.Vibration) { vibration = it; scope.launch { SBoardKeyboardSettings.setVibrationEnabled(it) } }
+                SliderRow(tr("Высота клавиатуры"), pref(K::heightPercent, 100).toFloat(), 70f..140f, { "${it.toInt()}%" }) { scope.launch { K.setHeightPercent(it.toInt()) } }
+                SliderRow(tr("Высота в альбомной ориентации и играх"), pref(K::landscapeHeightPercent, 78).toFloat(), 55f..120f, { "${it.toInt()}%" }) { scope.launch { K.setLandscapeHeightPercent(it.toInt()) } }
+                SwitchRow(tr("Ряд цифр"), tr("Отдельный верхний ряд с цифрами"), numberRow, Icons.Rounded.Pin) { numberRow = it; scope.launch { K.setNumberRow(it) } }
+                SwitchRow(tr("Символы на клавишах"), tr("Удержание буквы вводит символ над ней, как на Samsung"), symbolHints, Icons.Rounded.Tag) { symbolHints = it; scope.launch { K.setSymbolHints(it) } }
+                SwitchRow(tr("Режим одной руки"), null, oneHanded, Icons.Rounded.PanTool) { oneHanded = it; scope.launch { K.setOneHanded(it) } }
             }
         }
+
         item { SectionTitle(tr("Ввод")) }
         item {
             SBCard {
-                SwitchRow(tr("Подсказки и исправления"), tr("Предиктивный ввод и исправление опечаток (RU/EN, офлайн)"), suggestions, Icons.Rounded.Spellcheck) {
-                    suggestions = it; scope.launch { SBoardKeyboardSettings.setSuggestions(it) }
-                }
-                SwitchRow(tr("Строка инструментов"), tr("Панель подсказок и быстрых действий над клавиатурой"), smartbar, Icons.Rounded.ViewDay) {
-                    smartbar = it; scope.launch { SBoardKeyboardSettings.setSmartbar(it) }
-                }
-                SwitchRow(tr("sBoard Pass в клавиатуре"), tr("Вставка логинов, email, телефонов, адресов, паролей и OTP из хранилища"), AppSettings.keyboardVaultBar.value, Icons.Rounded.Key) {
-                    AppSettings.setKeyboardVaultBar(it)
-                }
-                SwitchRow(tr("Биометрия перед вставкой секретов"), tr("Пароли, коды и карты вставляются только после подтверждения"), AppSettings.biometricForSensitive.value, Icons.Rounded.Fingerprint) {
-                    AppSettings.setBiometricForSensitive(it)
-                }
+                SwitchRow(tr("Предиктивный ввод"), tr("Подсказки слов и исправление опечаток (RU/EN, офлайн)"), suggestions, Icons.Rounded.Spellcheck) { suggestions = it; scope.launch { K.setSuggestions(it) } }
+                SwitchRow(tr("Непрерывный ввод (свайп)"), tr("Ведите пальцем по буквам — получится слово"), swipe, Icons.Rounded.Gesture) { swipe = it; scope.launch { K.setSwipeTyping(it) } }
+                if (swipe) SwitchRow(tr("След пальца"), null, swipeTrail, Icons.Rounded.Timeline) { swipeTrail = it; scope.launch { K.setSwipeTrail(it) } }
+                SwitchRow(tr("Заглавная в начале предложения"), null, autoCaps, Icons.Rounded.TextFields) { autoCaps = it; scope.launch { K.setAutoCapitalization(it) } }
+                SwitchRow(tr("Точка двойным пробелом"), null, doubleSpace, Icons.Rounded.SpaceBar) { doubleSpace = it; scope.launch { K.setDoubleSpacePeriod(it) } }
+                SwitchRow(tr("Пробел после знаков препинания"), null, autoSpace, Icons.Rounded.FormatTextdirectionLToR) { autoSpace = it; scope.launch { K.setAutoSpacePunctuation(it) } }
+                SwitchRow(tr("Увеличение клавиши при нажатии"), null, keyPopup, Icons.Rounded.ZoomIn) { keyPopup = it; scope.launch { K.setKeyPopup(it) } }
+                SwitchRow(tr("Подсказки эмодзи"), null, emojiSuggest, Icons.Rounded.EmojiEmotions) { emojiSuggest = it; scope.launch { K.setEmojiSuggestions(it) } }
+                SliderRow(tr("Задержка удержания"), pref(K::longPressDelay, 300).toFloat(), 150f..800f, { tr("{0} мс", it.toInt()) }) { scope.launch { K.setLongPressDelay(it.toInt()) } }
             }
         }
-        item { SectionTitle(tr("Дополнительно")) }
+
+        item { SectionTitle(tr("Звук и вибрация")) }
         item {
-            SBCard(padding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)) {
-                ListRow(tr("Языки и раскладки"), tr("Русский, английский и другие языки"), icon = Icons.Rounded.Language, onClick = { openKeyboardEngineSettings(context, "settings/localization") })
-                ListRow(tr("Панель инструментов"), tr("Порядок и состав быстрых действий"), icon = Icons.Rounded.Tune, onClick = { openKeyboardEngineSettings(context, "settings/smartbar") })
-                ListRow(tr("Набор текста"), tr("Автозаглавные, пробелы, словарь"), icon = Icons.Rounded.TextFields, onClick = { openKeyboardEngineSettings(context, "settings/typing") })
-                ListRow(tr("Жесты и удержание клавиш"), tr("Свайпы, долгое нажатие и курсор"), icon = Icons.Rounded.Gesture, onClick = { openKeyboardEngineSettings(context, "settings/gestures") })
-                ListRow(tr("Эмодзи"), tr("История и тон кожи"), icon = Icons.Rounded.EmojiEmotions, onClick = { openKeyboardEngineSettings(context, "settings/media") })
-                ListRow(tr("Буфер обмена клавиатуры"), tr("История и синхронизация буфера"), icon = Icons.Rounded.ContentPaste, onClick = { openKeyboardEngineSettings(context, "settings/clipboard") })
+            SBCard {
+                SwitchRow(tr("Звук клавиш"), null, sound, Icons.AutoMirrored.Rounded.VolumeUp) { sound = it; scope.launch { K.setSoundEnabled(it) } }
+                if (sound) SliderRow(tr("Громкость"), pref(K::soundVolume, 50).toFloat(), 1f..100f, { "${it.toInt()}%" }) { scope.launch { K.setSoundVolume(it.toInt()) } }
+                SwitchRow(tr("Вибрация клавиш"), null, vibration, Icons.Rounded.Vibration) { vibration = it; scope.launch { K.setVibrationEnabled(it) } }
+            }
+        }
+
+        item { SectionTitle(tr("Панель инструментов")) }
+        item {
+            SBCard {
+                SwitchRow(tr("Строка инструментов"), tr("Подсказки и быстрые действия: эмодзи, sBoard Pass, буфер, переводчик, голос, одна рука"), smartbar, Icons.Rounded.ViewDay) { smartbar = it; scope.launch { K.setSmartbar(it) } }
+                SwitchRow(tr("sBoard Pass в клавиатуре"), tr("Вставка логинов, email, телефонов, адресов, паролей и OTP из хранилища"), AppSettings.keyboardVaultBar.value, Icons.Rounded.Key) { AppSettings.setKeyboardVaultBar(it) }
+                SwitchRow(tr("Биометрия перед вставкой секретов"), tr("Пароли, коды и карты вставляются только после подтверждения"), AppSettings.biometricForSensitive.value, Icons.Rounded.Fingerprint) { AppSettings.setBiometricForSensitive(it) }
+                SwitchRow(tr("История буфера обмена"), null, clipHistory, Icons.Rounded.ContentPaste) { clipHistory = it; scope.launch { K.setClipboardHistory(it) } }
+                SecondaryButton(tr("Сбросить панель инструментов"), { scope.launch { K.resetToolbar(); message = tr("Порядок кнопок восстановлен") } }, icon = Icons.Rounded.RestartAlt)
+                Text(tr("Чтобы изменить порядок кнопок, нажмите «⋯» на панели клавиатуры и выберите «Изменить»."), style = MaterialTheme.typography.bodySmall, color = palette.textFaint)
             }
         }
         item { Text(tr("Клавиатура основана на открытом движке FlorisBoard (Apache-2.0). Набранный текст обрабатывается локально и никуда не отправляется."), style = MaterialTheme.typography.bodySmall, color = palette.textFaint) }

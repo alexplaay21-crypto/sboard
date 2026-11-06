@@ -31,6 +31,14 @@ android {
     }
 
     signingConfigs {
+        // Shared debug key (public, not a secret): keeps the debug SHA-1 stable across machines and CI
+        // so a single Google OAuth Android client works for every debug build.
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
         if (hasReleaseSigning) {
             create("release") {
                 storeFile = file(releaseKeystorePath!!)
@@ -43,7 +51,7 @@ android {
 
     buildTypes {
         debug {
-            applicationIdSuffix = ""
+            signingConfig = signingConfigs.getByName("debug")
         }
         release {
             isMinifyEnabled = false
@@ -110,6 +118,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
     implementation("org.bouncycastle:bcprov-jdk18on:1.82")
+    implementation("com.lambdapioneer.argon2kt:argon2kt:1.6.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.android.gms:play-services-auth:22.0.0")
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")

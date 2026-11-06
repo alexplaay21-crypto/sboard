@@ -2,4 +2,6 @@
     <string name="sboard_floris_ime_name">sBoard Keyboard</string>
     <string name="quick_action__ime_ui_mode_vault">sBoard Pass</string>
     <string name="quick_action__ime_ui_mode_vault__tooltip">Insert data from the sBoard Vault</string>
+    <string name="quick_action__ime_ui_mode_translate">Translate</string>
+    <string name="quick_action__ime_ui_mode_translate__tooltip">Translate the text in the field</string>
 </resources>

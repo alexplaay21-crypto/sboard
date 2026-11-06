@@ -19,6 +19,7 @@ package dev.patrickgold.florisboard.ime.keyboard
 import android.content.Context
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.automirrored.filled.ArrowRightAlt
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -149,7 +150,11 @@ fun ComputingEvaluator.computeLabel(data: KeyData): String? {
             }
             KeyCode.IME_UI_MODE_TEXT,
             KeyCode.VIEW_CHARACTERS -> {
-                evaluator.context()?.getString(R.string.key__view_characters)
+                // Modified for sBoard: Samsung-style alphabet label in the active language.
+                when (evaluator.subtype.primaryLocale.language) {
+                    "ru", "uk", "be", "bg", "kk", "sr", "mk" -> "АБВ"
+                    else -> "ABC"
+                }
             }
             KeyCode.VIEW_NUMERIC,
             KeyCode.VIEW_NUMERIC_ADVANCED -> {
@@ -162,11 +167,10 @@ fun ComputingEvaluator.computeLabel(data: KeyData): String? {
                 evaluator.context()?.getString(R.string.key__view_phone2)
             }
             KeyCode.VIEW_SYMBOLS -> {
-                evaluator.context()?.getString(R.string.key__view_symbols)
+                // Modified for sBoard: Samsung-style symbol page labels.
+                if (evaluator.keyboard.mode == KeyboardMode.SYMBOLS2) "2/2" else "!#1"
             }
-            KeyCode.VIEW_SYMBOLS2 -> {
-                evaluator.context()?.getString(R.string.key__view_symbols2)
-            }
+            KeyCode.VIEW_SYMBOLS2 -> "1/2"
             KeyCode.HALF_SPACE -> {
                 evaluator.context()?.getString(R.string.key__view_half_space)
             }
@@ -251,6 +255,9 @@ fun ComputingEvaluator.computeImageVector(data: KeyData): ImageVector? {
         }
         KeyCode.IME_UI_MODE_VAULT -> {
             Icons.Default.Key
+        }
+        KeyCode.IME_UI_MODE_TRANSLATE -> {
+            Icons.Default.Translate
         }
         KeyCode.LANGUAGE_SWITCH -> {
             Icons.Default.Language

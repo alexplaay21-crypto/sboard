@@ -113,6 +113,19 @@ object GoogleAccount {
         return Authorization.Token(result.accessToken?.takeIf { it.isNotBlank() } ?: error(tr("Google не выдал токен доступа")))
     }
 
+    /** SHA-1 of the certificate this APK is signed with — what the Google OAuth Android client must contain. */
+    fun signingSha1(context: Context): String = runCatching {
+        val pm = context.packageManager
+        val signatures = if (android.os.Build.VERSION.SDK_INT >= 28) {
+            val info = pm.getPackageInfo(context.packageName, android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES).signingInfo
+            if (info == null) emptyArray() else if (info.hasMultipleSigners()) info.apkContentsSigners else info.signingCertificateHistory
+        } else {
+            @Suppress("DEPRECATION") pm.getPackageInfo(context.packageName, android.content.pm.PackageManager.GET_SIGNATURES).signatures
+        }
+        val cert = signatures?.firstOrNull()?.toByteArray() ?: return@runCatching "—"
+        java.security.MessageDigest.getInstance("SHA-1").digest(cert).joinToString(":") { "%02X".format(it) }
+    }.getOrDefault("—")
+
     fun describe(e: ApiException): String = when (e.statusCode) {
         CommonStatusCodes.DEVELOPER_ERROR -> tr("Google OAuth не настроен для этой сборки: нужен Android OAuth-клиент с package name com.sboard.app и SHA-1 сертификата подписи APK.")
         CommonStatusCodes.NETWORK_ERROR -> tr("Нет соединения с Google")

@@ -162,8 +162,13 @@ open class FlorisApplication : Application() {
             }
 
             val idSeed = System.currentTimeMillis()
+            // Modified for sBoard: Samsung-style symbol pages (also used as long-press letter hints).
             val subtypes = listOf(english, russian).mapIndexed { index, preset ->
-                preset.toSubtype().copy(id = idSeed + index)
+                val subtype = preset.toSubtype()
+                subtype.copy(id = idSeed + index, layoutMap = subtype.layoutMap.copy(
+                    symbols = dev.patrickgold.florisboard.ime.keyboard.extCoreLayout("western_samsung"),
+                    symbols2 = dev.patrickgold.florisboard.ime.keyboard.extCoreLayout("western_samsung"),
+                ))
             }
             prefs.localization.subtypes.set(SubtypeJsonConfig.encodeToString(subtypes))
             prefs.localization.activeSubtypeId.set(subtypes.first().id)

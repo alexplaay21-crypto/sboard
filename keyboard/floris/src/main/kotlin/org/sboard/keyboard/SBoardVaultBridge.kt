@@ -35,8 +35,19 @@ interface VaultKeyboardProvider {
     fun text(key: String): String
 }
 
+/** Online translator supplied by the sBoard app (network use only on explicit tap). */
+interface KeyboardTranslator {
+    /** (code, display name) pairs. */
+    val languages: List<Pair<String, String>>
+    suspend fun translate(text: String, from: String, to: String): String
+    fun text(key: String): String
+    fun loadPair(): Pair<String, String>
+    fun savePair(from: String, to: String)
+}
+
 object SBoardVaultBridge {
     @Volatile var provider: VaultKeyboardProvider? = null
+    @Volatile var translator: KeyboardTranslator? = null
 
     private data class Pending(val text: String, val targetPackage: String?, val createdAt: Long)
     @Volatile private var pending: Pending? = null

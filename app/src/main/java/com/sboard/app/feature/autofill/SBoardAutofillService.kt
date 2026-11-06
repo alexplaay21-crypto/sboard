@@ -68,6 +68,9 @@ class SBoardAutofillService : AutofillService() {
                 val saveType = SaveInfo.SAVE_DATA_TYPE_PASSWORD or (if (form.usernameIds.isNotEmpty()) SaveInfo.SAVE_DATA_TYPE_USERNAME else 0)
                 response.setSaveInfo(SaveInfo.Builder(saveType, form.passwordIds.toTypedArray()).apply {
                     if (form.usernameIds.isNotEmpty()) setOptionalIds(form.usernameIds.toTypedArray())
+                    // Many apps and single-page web logins never finish the activity: also offer to
+                    // save when the login fields disappear (navigation, view swap, WebView change).
+                    setFlags(SaveInfo.FLAG_SAVE_ON_ALL_VIEWS_INVISIBLE)
                 }.build())
             }
             callback.onSuccess(if (datasets > 0 && !cancellationSignal.isCanceled) response.build() else null)

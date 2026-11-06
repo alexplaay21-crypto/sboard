@@ -162,11 +162,10 @@ class FlorisImeService : LifecycleInputMethodService() {
             // Modified for sBoard: open the bundled Floris runtime settings in-app.
             val ims = FlorisImeServiceReference.get() ?: return
             ims.requestHideSelf(0)
-            val settingsIntent = Intent(ims, dev.patrickgold.florisboard.app.FlorisAppActivity::class.java)
-            settingsIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            settingsIntent.data = android.net.Uri.parse("ui://florisboard/settings/keyboard")
-            settingsIntent.action = Intent.ACTION_VIEW
-            settingsIntent.addCategory(Intent.CATEGORY_BROWSABLE)
+            // Modified for sBoard: the keyboard is configured in the sBoard app (Keyboard tab).
+            val settingsIntent = Intent().setClassName(ims.packageName, "com.sboard.app.MainActivity")
+                .putExtra("sboard.open_tab", "keyboard")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             ims.startActivity(settingsIntent)
         }
 
@@ -686,6 +685,7 @@ class FlorisImeService : LifecycleInputMethodService() {
                                 ImeUiMode.MEDIA -> MediaInputLayout()
                                 ImeUiMode.CLIPBOARD -> ClipboardInputLayout()
                                 ImeUiMode.VAULT -> org.sboard.keyboard.VaultInputLayout()
+                                ImeUiMode.TRANSLATE -> org.sboard.keyboard.TranslateInputLayout()
                             }
                         }
                     }

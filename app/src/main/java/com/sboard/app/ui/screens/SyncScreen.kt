@@ -90,6 +90,18 @@ fun SyncScreen(nav: Navigator) {
                 }
             }
             message?.let { (text, tone) -> item { Banner(text, tone) } }
+            if (account == null) item {
+                val sha1 = remember { GoogleAccount.signingSha1(context) }
+                SBCard {
+                    Text(tr("Если вход в Google не работает"), style = MaterialTheme.typography.titleSmall, color = palette.text)
+                    Text(tr("Владелец приложения должен один раз создать в Google Cloud Console OAuth-клиент типа Android с этими данными и включить Google Drive API:"),
+                        style = MaterialTheme.typography.bodySmall, color = palette.textMuted)
+                    FieldRow(tr("Имя пакета"), context.packageName, monospace = true)
+                    FieldRow(tr("SHA-1 сертификата"), sha1, monospace = true)
+                    Text(tr("Ошибка «DEVELOPER_ERROR (10)» означает, что такой клиент не создан или SHA-1 не совпадает. Пока аккаунт в режиме Testing, добавьте свой Google-аккаунт в Test users."),
+                        style = MaterialTheme.typography.bodySmall, color = palette.textFaint)
+                }
+            }
             if (account != null) {
                 item {
                     SBCard {

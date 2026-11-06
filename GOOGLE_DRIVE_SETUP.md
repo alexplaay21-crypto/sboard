@@ -59,11 +59,14 @@ sBoard не содержит фиктивных ключей. Для Android-к�
      Локально: `./gradlew :app:signingReport` или
      `keytool -list -v -keystore <keystore.jks> -alias <alias>`.
    Создайте отдельный Android-клиент для debug-ключа и для release-ключа.
+   **Debug-сборки** (локальные и из GitHub Actions) подписываются общим ключом `app/debug.keystore`,
+   поэтому SHA-1 у них всегда один:
+   `38:BE:47:F5:FD:11:A6:85:08:6A:64:8F:2C:86:0A:5D:6C:42:E7:EF`.
+   Приложение также показывает package name и SHA-1 в Профиль → Синхронизация (пока Google не подключён).
 5. Для стабильного SHA-1 в GitHub Actions добавьте секреты репозитория:
    `SBOARD_KEYSTORE_BASE64` (keystore в base64), `SBOARD_KEYSTORE_PASSWORD`, `SBOARD_KEY_ALIAS`,
    `SBOARD_KEY_PASSWORD`. Тогда release-APK подписывается постоянным ключом; без них собирается
-   неподписанный `app-release-unsigned.apk`. Debug-APK из CI подписывается временным ключом раннера,
-   и его SHA-1 меняется — для проверки входа используйте локальную сборку или release.
+   неподписанный `app-release-unsigned.apk`.
 6. На устройстве должны быть Google Play services и вход в Google-аккаунт.
 
 Web client ID и серверная часть не требуются: токен доступа выдаётся `AuthorizationClient`

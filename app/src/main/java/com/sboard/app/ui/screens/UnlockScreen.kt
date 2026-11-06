@@ -112,6 +112,7 @@ fun UnlockPanel(
         }
         AnimatedBanner(error, Tone.DANGER)
         PrimaryButton(tr("Разблокировать"), { submit() }, enabled = password.isNotEmpty(), loading = busy)
+        if (busy) Text(tr("Проверяем ключ… Это занимает около секунды."), style = MaterialTheme.typography.bodySmall, color = palette.textMuted)
         if (biometricEnabled && !recoveryMode) {
             SecondaryButton(tr("Войти по биометрии"), { biometric() }, icon = Icons.Rounded.Fingerprint, enabled = !busy)
         }

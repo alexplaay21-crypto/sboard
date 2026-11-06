@@ -747,6 +747,8 @@ class KeyboardManager(context: Context) : InputKeyEventReceiver {
             KeyCode.IME_UI_MODE_CLIPBOARD -> activeState.imeUiMode = ImeUiMode.CLIPBOARD
             KeyCode.IME_UI_MODE_VAULT -> activeState.imeUiMode =
                 if (activeState.imeUiMode == ImeUiMode.VAULT) ImeUiMode.TEXT else ImeUiMode.VAULT
+            KeyCode.IME_UI_MODE_TRANSLATE -> activeState.imeUiMode =
+                if (activeState.imeUiMode == ImeUiMode.TRANSLATE) ImeUiMode.TEXT else ImeUiMode.TRANSLATE
             KeyCode.VOICE_INPUT -> FlorisImeService.switchToVoiceInputMethod()
             KeyCode.KANA_SWITCHER -> handleKanaSwitch()
             KeyCode.KANA_HIRA -> handleKanaHira()

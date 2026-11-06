@@ -201,10 +201,15 @@ class VaultKeyManager(context: Context, private val session: VaultSession = Vaul
         val params = KdfParams(wrap.m, wrap.t, wrap.p)
         return try {
             params.validate()
-            val derived = Argon2Kdf.derive(secret, B64.fromStd(wrap.salt), params)
-            try {
-                AesGcm.decrypt(derived, B64.fromStd(wrap.iv), B64.fromStd(wrap.ct), aad).takeIf { it.size == 32 }
+            val salt = B64.fromStd(wrap.salt)
+            fun attempt(derived: ByteArray): ByteArray? = try {
+                runCatching { AesGcm.decrypt(derived, B64.fromStd(wrap.iv), B64.fromStd(wrap.ct), aad) }.getOrNull()?.takeIf { it.size == 32 }
             } finally { derived.fill(0) }
+            val prefs = appContext.getSharedPreferences("sboard_kdf", Context.MODE_PRIVATE)
+            attempt(Argon2Kdf.derive(secret, salt, params))?.also { prefs.edit().putBoolean("native_verified", true).apply() }
+                // Until the fast native path has been confirmed once on this device, cross-check with
+                // the Java implementation so an implementation difference can never lock a user out.
+                ?: if (prefs.getBoolean("native_verified", false)) null else attempt(Argon2Kdf.deriveJava(secret, salt, params))
         } catch (_: Exception) {
             null
         } finally { secret.fill(0) }
