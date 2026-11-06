@@ -66,8 +66,10 @@ data class QuickActionArrangement(
 
     companion object {
         val Default = QuickActionArrangement(
-            stickyAction = QuickAction.InsertKey(TextKeyData.VOICE_INPUT),
+            // Modified for sBoard: the Vault panel is the primary Smart Bar action.
+            stickyAction = QuickAction.InsertKey(TextKeyData.IME_UI_MODE_VAULT),
             dynamicActions = listOf(
+                QuickAction.InsertKey(TextKeyData.VOICE_INPUT),
                 QuickAction.InsertKey(TextKeyData.UNDO),
                 QuickAction.InsertKey(TextKeyData.REDO),
                 QuickAction.InsertKey(TextKeyData.SETTINGS),

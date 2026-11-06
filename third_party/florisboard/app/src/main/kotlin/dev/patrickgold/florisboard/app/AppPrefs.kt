@@ -728,7 +728,8 @@ abstract class FlorisPreferenceModel : PreferenceModel() {
         )
         val enabled = boolean(
             key = "suggestion__enabled",
-            default = false,
+            // Modified for sBoard: word suggestions are on by default.
+            default = true,
         )
         val displayMode = enum(
             key = "suggestion__display_mode",

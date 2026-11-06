@@ -18,6 +18,7 @@ package dev.patrickgold.florisboard.ime.keyboard
 
 import android.content.Context
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.automirrored.filled.ArrowRightAlt
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -247,6 +248,9 @@ fun ComputingEvaluator.computeImageVector(data: KeyData): ImageVector? {
         }
         KeyCode.IME_UI_MODE_CLIPBOARD -> {
             Icons.AutoMirrored.Outlined.Assignment
+        }
+        KeyCode.IME_UI_MODE_VAULT -> {
+            Icons.Default.Key
         }
         KeyCode.LANGUAGE_SWITCH -> {
             Icons.Default.Language

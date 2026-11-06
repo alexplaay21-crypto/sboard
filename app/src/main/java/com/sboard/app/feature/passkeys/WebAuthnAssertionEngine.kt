@@ -50,7 +50,9 @@ object WebAuthnAssertionEngine {
         userHandle: ByteArray,
         privateKey: PrivateKey,
         currentSignCount: Long,
-        userVerified: Boolean
+        userVerified: Boolean,
+        /** Supplied by privileged callers (browsers) that build clientDataJSON themselves. */
+        clientDataHash: ByteArray? = null,
     ): Assertion {
         require(credentialId.isNotEmpty()) { "Empty credential ID" }
         require(userHandle.isNotEmpty()) { "Empty user handle" }
@@ -78,16 +80,17 @@ object WebAuthnAssertionEngine {
 
         val rpIdHash = MessageDigest.getInstance("SHA-256")
             .digest(normalizedExpected.toByteArray(StandardCharsets.UTF_8))
-        // UP=1, UV=1. BE/BS are unset for a single-device credential.
-        val flags: Byte = 0x05
+        // UP=1, UV=1, BE=1, BS=1: the credential is backed up in the encrypted, synced Vault.
+        val flags: Byte = 0x1D
         val authData = ByteBuffer.allocate(37).order(ByteOrder.BIG_ENDIAN)
             .put(rpIdHash)
             .put(flags)
             .putInt(nextCounter.toInt())
             .array()
 
-        val clientDataHash = MessageDigest.getInstance("SHA-256").digest(clientData)
-        val signedBytes = authData + clientDataHash
+        val hashToSign = clientDataHash?.also { require(it.size == 32) { "Invalid clientDataHash" } }
+            ?: MessageDigest.getInstance("SHA-256").digest(clientData)
+        val signedBytes = authData + hashToSign
         val signature = when (privateKey.algorithm.uppercase()) {
             "EC", "ECDSA" -> Signature.getInstance("SHA256withECDSA")
             "RSA" -> Signature.getInstance("SHA256withRSA")

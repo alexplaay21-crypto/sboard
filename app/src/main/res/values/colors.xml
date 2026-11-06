@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="sboard_background">#F3F3F1</color>
+    <color name="sboard_surface">#FFFFFF</color>
+    <color name="sboard_text">#17181A</color>
+    <color name="sboard_text_muted">#666870</color>
+    <color name="sboard_accent">#A58A27</color>
+    <color name="sboard_icon_background">#151618</color>
+    <color name="sboard_icon_gold">#D5B94B</color>
+</resources>

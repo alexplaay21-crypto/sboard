@@ -88,6 +88,8 @@ object KeyCode {
     const val IME_UI_MODE_TEXT =            -211
     const val IME_UI_MODE_MEDIA =           -212
     const val IME_UI_MODE_CLIPBOARD =       -213
+    // Modified for sBoard: opens the Vault quick-insert panel.
+    const val IME_UI_MODE_VAULT =           -214
 
     const val SYSTEM_INPUT_METHOD_PICKER =  -221
     const val SYSTEM_PREV_INPUT_METHOD =    -222

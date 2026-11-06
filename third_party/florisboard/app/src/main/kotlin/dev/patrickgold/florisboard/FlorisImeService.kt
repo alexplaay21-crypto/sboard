@@ -368,6 +368,10 @@ class FlorisImeService : LifecycleInputMethodService() {
             activeState.isSelectionMode = editorInfo.initialSelection.isSelectionMode
             editorInstance.handleStartInputView(editorInfo, isRestart = restarting)
         }
+        // Modified for sBoard: commit a Vault value the user approved in the confirmation activity.
+        org.sboard.keyboard.SBoardVaultBridge.consumePending(editorInfo.packageName)?.let { text ->
+            android.os.Handler(mainLooper).postDelayed({ editorInstance.commitText(text) }, 120)
+        }
     }
 
     override fun onEvaluateInputViewShown(): Boolean {
@@ -681,6 +685,7 @@ class FlorisImeService : LifecycleInputMethodService() {
                                 ImeUiMode.TEXT -> TextInputLayout()
                                 ImeUiMode.MEDIA -> MediaInputLayout()
                                 ImeUiMode.CLIPBOARD -> ClipboardInputLayout()
+                                ImeUiMode.VAULT -> org.sboard.keyboard.VaultInputLayout()
                             }
                         }
                     }

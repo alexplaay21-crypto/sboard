@@ -26,7 +26,7 @@ class WebAuthnAssertionEngineTest {
         )
         assertEquals(8L, result.newSignCount)
         assertEquals(37, result.authenticatorData.size)
-        assertEquals(0x05, result.authenticatorData[32].toInt())
+        assertEquals(0x1D, result.authenticatorData[32].toInt())
         val clientHash = MessageDigest.getInstance("SHA-256").digest(result.clientDataJson)
         val verifier = Signature.getInstance("SHA256withECDSA")
         verifier.initVerify(pair.public)

@@ -12,7 +12,9 @@ object WebAuthnRegistrationPolicy {
         val userName: String,
         val displayName: String,
         val challenge: String,
-        val excludedCredentialIds: List<ByteArray>
+        val excludedCredentialIds: List<ByteArray>,
+        /** True when the RP asked for the credProps extension (we report rk = true). */
+        val credPropsRequested: Boolean = false,
     )
 
     fun validate(requestJson: String, expectedRpId: String, origin: String): ValidatedRequest {
@@ -40,7 +42,7 @@ object WebAuthnRegistrationPolicy {
         val rpName = rp.optString("name").trim()
         val userName = user.optString("name").trim()
         val displayName = user.optString("displayName", userName).trim().ifBlank { userName }
-        require(rpName.isNotBlank() && rpName.length <= 256) { "Invalid RP name" }
+        require(rpName.length <= 256) { "Invalid RP name" }
         require(userName.isNotBlank() && userName.length <= 256) { "Invalid user name" }
         require(displayName.length <= 256) { "Display name is too long" }
 
@@ -68,9 +70,10 @@ object WebAuthnRegistrationPolicy {
                 "Unsupported user-verification requirement"
             }
         }
-        require(request.optString("attestation", "none") == "none") { "Only none attestation is supported" }
-        val extensions = request.optJSONObject("extensions")
-        require(extensions == null || extensions.length() == 0) { "Requested extensions are not supported" }
+        // Attestation conveyance is a preference; sBoard always answers with "none" (no device attestation).
+        require(request.optString("attestation", "none") in setOf("none", "indirect", "direct", "enterprise")) { "Invalid attestation preference" }
+        // Unknown client extensions are ignored as permitted by WebAuthn; credProps is answered.
+        val credProps = request.optJSONObject("extensions")?.optBoolean("credProps", false) == true
 
         val exclusions = ArrayList<ByteArray>()
         val exclude = request.optJSONArray("excludeCredentials")
@@ -86,6 +89,6 @@ object WebAuthnRegistrationPolicy {
                 }
             }
         }
-        return ValidatedRequest(rpId, rpName, userId, userName, displayName, challenge, exclusions)
+        return ValidatedRequest(rpId, rpName.ifBlank { rpId }, userId, userName, displayName, challenge, exclusions, credProps)
     }
 }
