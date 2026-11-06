@@ -209,6 +209,10 @@ abstract class VaultDatabase : RoomDatabase() {
                 .build()
                 .also { instance = it }
         }
+
+        /** Test hook: closes the singleton so the next [get] opens the database file again. */
+        @androidx.annotation.VisibleForTesting
+        fun resetForTests() = synchronized(this) { instance?.close(); instance = null }
     }
 }
 

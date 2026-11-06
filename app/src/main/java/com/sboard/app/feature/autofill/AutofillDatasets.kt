@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.IntentSender
+import android.os.Build
 import android.service.autofill.Dataset
 import android.view.autofill.AutofillId
 import android.view.autofill.AutofillValue
@@ -100,7 +101,8 @@ object AutofillDatasets {
     }
 
     /** Dataset whose values are released only after confirmation in [AutofillActivity]. */
-    fun lockedDataset(context: Context, item: VaultItem, form: ParsedForm, requestCode: Int): Dataset? {
+    fun lockedDataset(context: Context, item: VaultItem, form: ParsedForm, requestCode: Int,
+                      inlineRequest: android.view.inputmethod.InlineSuggestionsRequest? = null, inlineIndex: Int = 0): Dataset? {
         val ids = values(item, form).keys
         if (ids.isEmpty()) return null
         val pres = presentation(context, item.title, item.subtitle())
@@ -108,7 +110,25 @@ object AutofillDatasets {
         return Dataset.Builder(pres).apply {
             ids.forEach { setValue(it, null, pres) }
             setAuthentication(sender)
+            if (Build.VERSION.SDK_INT >= 30) inlinePresentation(context, inlineRequest, inlineIndex, item.title, item.subtitle())?.let { setInlinePresentation(it) }
         }.build()
+    }
+
+    /** Android 11+: suggestion chip shown inside the keyboard's suggestion strip. */
+    fun inlinePresentation(context: Context, request: android.view.inputmethod.InlineSuggestionsRequest?, index: Int, title: String, subtitle: String?): android.service.autofill.InlinePresentation? {
+        if (Build.VERSION.SDK_INT < 30 || request == null) return null
+        if (index >= request.maxSuggestionCount) return null
+        val specs = request.inlinePresentationSpecs
+        if (specs.isEmpty()) return null
+        val spec = specs[minOf(index, specs.size - 1)]
+        if (!androidx.autofill.inline.UiVersions.getVersions(spec.style).contains(androidx.autofill.inline.UiVersions.INLINE_UI_VERSION_1)) return null
+        val attribution = PendingIntent.getActivity(context, 0, Intent(context, com.sboard.app.MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        val content = androidx.autofill.inline.v1.InlineSuggestionUi.newContentBuilder(attribution)
+            .setTitle(title)
+            .apply { if (!subtitle.isNullOrBlank()) setSubtitle(subtitle) }
+            .setStartIcon(android.graphics.drawable.Icon.createWithResource(context, R.drawable.ic_autofill_key))
+            .build()
+        return android.service.autofill.InlinePresentation(content.slice, spec, false)
     }
 
     fun pendingIntentSender(context: Context, intent: Intent, requestCode: Int): IntentSender =

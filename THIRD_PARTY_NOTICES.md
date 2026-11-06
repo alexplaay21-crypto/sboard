@@ -21,6 +21,23 @@
 - `res/xml/method.xml` and `res/xml/spellchecker.xml`: use sBoard branding and the integrated settings activity.
 - `res/values/strings.xml` and `res/values-ru/strings.xml`: label the integrated host app as sBoard; upstream attribution remains in its About screen and this notice.
 - `lib/snygg/build.gradle.kts`: decouples schema generation from consumer builds; the checked-in schema remains.
+- `ImeUiMode.kt`, `KeyCode.kt`, `TextKeyData.kt`, `KeyboardManager.kt`, `ComputingEvaluator.kt`, `PopupUiController.kt`, `QuickAction.kt`, `QuickActionArrangement.kt`, `FlorisImeService.kt`: add the sBoard Pass Vault panel (`ImeUiMode.VAULT`, key code `-214`) as the default sticky Smart Bar action and commit values approved in the sBoard confirmation activity.
+- `AppPrefs.kt`: word suggestions are enabled by default.
+- sBoard-owned keyboard code lives outside the vendored tree in `keyboard/floris/src/main/kotlin/org/sboard/keyboard/`.
 - `lib/snygg/src/test/.../TestColorSchemes.kt`: supplies the missing test-only color scheme fixture referenced by the upstream tests; it is not packaged in the application.
 
 FlorisBoard sources and bundled assets are subject to the license notices shipped with the upstream revision. Third-party dependency licenses remain inventoried in `third_party/florisboard/app/src/main/config/licenses`; they must be included in the app's generated license screen before release.
+
+## Other components
+
+| Component | License | Use |
+|---|---|---|
+| BouncyCastle `bcprov-jdk18on` | MIT | Argon2id key derivation |
+| ZXing core + `zxing-android-embedded` (JourneyApps) | Apache-2.0 | Offline QR scanner for 2FA codes |
+| zxcvbn4j (`com.nulab-inc:zxcvbn`) | MIT | Offline password strength estimation |
+| OkHttp | Apache-2.0 | Google Drive REST, Digital Asset Links, translator |
+| AndroidX (Compose, Room, WorkManager, Biometric, Credentials) | Apache-2.0 | UI and platform integration |
+| Google Play services Auth | Android SDK license | Google OAuth authorization |
+
+The translator calls the public MyMemory API (https://mymemory.translated.net) only when the user
+taps “Translate”; it is subject to the service's terms of use.

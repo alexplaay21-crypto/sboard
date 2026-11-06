@@ -1,55 +1,90 @@
 # sBoard
 
-**Status: ранний этап разработки.** Репозиторий содержит Android-приложение на Kotlin и Jetpack Compose. Реализованные части перечислены ниже; наличие экрана или настройки не считается подтверждением готовности функции.
+sBoard — Android-приложение, объединяющее системную клавиатуру, менеджер паролей, хранилище
+личных данных, автозаполнение, passkeys, аутентификатор 2FA и зашифрованную синхронизацию через
+Google Drive. Kotlin · Jetpack Compose · Room · WorkManager · Credential Manager · Autofill Framework.
 
-## Что уже есть
+Минимальная версия Android — 8.0 (API 26); passkeys — Android 14+ (ограничение платформы).
 
-- Одно Android-приложение с разделами главного экрана, клавиатуры, хранилища, инструментов и профиля.
-- Системная клавиатура с русским и английским вводом, символами, цифрами, эмодзи, вставкой из буфера обмена, округлыми клавишами, темами и вибрацией. Голосовой ввод использует Android SpeechRecognizer: офлайн на поддерживаемых устройствах, сетевой системный распознаватель — только после отдельного согласия.
-- Локальное хранилище с зашифрованными записями, мастер-паролем, биометрической разблокировкой и Recovery Key.
-- Служба Autofill для поддерживаемых учётных записей, генератор паролей, TOTP и зашифрованное резервирование через Google Drive.
-- Локализованный интерфейс RU/EN.
+## Возможности
 
-## Ограничения
+| Раздел | Что умеет |
+|---|---|
+| **Клавиатура** | Системная IME на движке FlorisBoard: русская и английская раскладки, переключение языков, подсказки слов и исправление опечаток (офлайн-словари RU/EN), цифры, символы, эмодзи, буфер обмена с историей, удержание клавиш для дополнительных символов, высота, звук, вибрация, светлая/тёмная тема, настраиваемая строка инструментов. |
+| **sBoard Pass (Smart Bar)** | Кнопка-ключ на панели клавиатуры открывает данные хранилища: логины, email, телефоны, имена, адреса, OTP-коды, пароли, данные карт. Секреты вставляются только после явного подтверждения и (по настройке) биометрии; значение печатается прямо в поле, минуя буфер обмена. |
+| **Хранилище** | Пароли, банковские карты, личные данные, защищённые заметки, коды 2FA, passkeys. Добавление, редактирование, удаление с корзиной, поиск, избранное, категории, дополнительные поля, история изменений (до 15 версий), генератор паролей, копирование с автоочисткой буфера. |
+| **Автозаполнение** | `AutofillService`: определение полей логина/пароля/email/OTP/телефона/имени/адреса/карты по hints, HTML-атрибутам, типам ввода и подписям RU/EN; сопоставление по домену или пакету приложения; каждое заполнение — через экран подтверждения и биометрию; сохранение новых паролей; режим совместимости для браузеров. |
+| **Passkeys** | Поставщик Credential Manager: создание и вход, синхронизация и восстановление вместе с хранилищем. См. [PASSKEY_PROVIDER_STATUS.md](PASSKEY_PROVIDER_STATUS.md). |
+| **Аутентификатор** | TOTP (RFC 6238, SHA-1/256/512, 6–8 цифр, 30/60 с), добавление по QR-коду (ZXing, офлайн) или ключу, таймер обновления, копирование. |
+| **Синхронизация** | Один зашифрованный файл `sboard_backup.enc` в appDataFolder Google Drive, двустороннее слияние, конфликты, удаления, восстановление на новом устройстве, повтор при потере сети. См. [GOOGLE_DRIVE_SETUP.md](GOOGLE_DRIVE_SETUP.md). |
+| **Инструменты** | Генератор паролей и фраз, проверка надёжности (zxcvbn, офлайн), аудит паролей (слабые/повторы/старые), QR-сканер 2FA, переводчик (онлайн, отдельно от офлайн-функций), менеджер буфера обмена. |
+| **Профиль** | Аккаунт Google, безопасность (мастер-пароль, биометрия, автоблокировка, Recovery Key, защита экрана, очистка буфера), синхронизация, устройства, тема и язык (RU/EN, переключение на лету), информация о версии. |
 
-Автокоррекция, предиктивный ввод, T9, пользовательский словарь, история буфера обмена, полноценная интеграция WebAuthn/passkey и бесшовная синхронизация изменений между устройствами не завершены. Google Drive использует зашифрованные резервные копии; это ещё не гарантирует непрерывное разрешение конфликтов и двустороннюю синхронизацию. Биометрия, Autofill и IME требуют проверки на реальном устройстве. См. `BUILD_STATUS.md`, `PASSKEY_PROVIDER_STATUS.md` и `SYNC_STATUS.md`.
+## Безопасность
 
-Приложение не содержит отдельного AI-помощника. Не вводите реальные секреты в тестовую сборку до самостоятельной проверки безопасности и восстановления резервных копий.
+- Каждая запись шифруется **AES-256-GCM** случайным 256-битным ключом хранилища. AAD связывает
+  шифртекст с id, временем изменения и признаком удаления.
+- Ключ хранилища обёрнут ключом **Argon2id** (64 МиБ, t=3) из мастер-пароля, опционально —
+  Recovery Key (256 бит) и биометрическим ключом **Android Keystore** (BIOMETRIC_STRONG,
+  инвалидируется при смене биометрии).
+- Мастер-пароль нигде не хранится; пароль аккаунта Google и мастер-пароль полностью независимы.
+- Ключ хранилища — только в памяти; автоблокировка по таймеру и при выключении экрана.
+- `FLAG_SECURE` (без скриншотов и превью в «Недавних»), секреты скрыты по умолчанию,
+  копирование помечается `EXTRA_IS_SENSITIVE` и очищается по таймеру.
+- `allowBackup=false` + правила исключения для Android 12+; запрет cleartext-трафика.
+- Логирование содержимого полей отсутствует; автозаполнение и провайдер passkeys работают по
+  принципу fail closed.
+
+## Архитектура
+
+```
+app/                    приложение sBoard (com.sboard.app)
+  core/                 криптография, сессия и автоблокировка, i18n, настройки
+  data/                 Room v9, модель записей, шифрование записей, репозиторий, миграции
+  feature/vault         иерархия ключей, биометрия, удаление данных
+  feature/sync          формат sboard_backup.enc, слияние, Drive REST, OAuth, WorkManager
+  feature/autofill      AutofillService, разбор полей, подтверждение и сохранение
+  feature/passkeys      Credential Provider, WebAuthn, проверка источника
+  feature/keyboard      мост «клавиатура ↔ хранилище», подтверждение вставки
+  feature/otp, tools    TOTP, генератор, надёжность, перевод
+  ui/                   дизайн-система (графит + приглушённое золото), навигация, экраны
+keyboard/floris/        модуль клавиатуры (FlorisBoard v0.5.2, Apache-2.0) + панель sBoard Pass
+third_party/florisboard исходники FlorisBoard (изменения перечислены в THIRD_PARTY_NOTICES.md)
+```
 
 ## Сборка
 
-Требуются JDK 17, Android SDK Platform 36 и Build Tools 36.0.0. Используйте Gradle Wrapper из репозитория:
+Требуются JDK 17, Android SDK Platform 36, Build-Tools 36.0.0.
 
 ```sh
-./gradlew testDebugUnitTest :app:assembleDebug
+./gradlew :app:testDebugUnitTest      # unit- и интеграционные тесты (JVM + Robolectric)
+./gradlew :app:assembleDebug          # app/build/outputs/apk/debug/app-debug.apk
+./gradlew :app:assembleRelease        # подпись — через переменные SBOARD_KEYSTORE_*
+python3 scripts/check_translations.py # все строки интерфейса переведены на английский
 ```
 
-APK для отладки появится в `app/build/outputs/apk/debug/`. На Windows используйте `gradlew.bat`. GitHub Actions выполняет модульные тесты и собирает debug APK при push и pull request в `main`. Для Google Drive OAuth необходима отдельная настройка Google Cloud/Android OAuth-клиента и соответствующей конфигурации приложения; секреты и ключи подписи не должны попадать в Git. Подробности: `GOOGLE_DRIVE_SETUP.md`.
+GitHub Actions (`.github/workflows/android-apk.yml`) запускает проверку переводов, тесты и
+собирает debug и release APK как артефакты сборки.
 
-## English
+## Что требуется от владельца проекта
 
-**Status: early development.** This repository contains an Android application built with Kotlin and Jetpack Compose. A visible screen or setting does not imply that the related feature is complete.
+1. **Google OAuth** для синхронизации: включить Google Drive API и создать Android OAuth-клиент
+   для `com.sboard.app` с SHA-1 вашего ключа подписи — пошагово в
+   [GOOGLE_DRIVE_SETUP.md](GOOGLE_DRIVE_SETUP.md). Без этого вход в Google вернёт `DEVELOPER_ERROR`;
+   все офлайн-функции работают без него.
+2. **Ключ подписи release** в секретах GitHub (`SBOARD_KEYSTORE_BASE64`, `SBOARD_KEYSTORE_PASSWORD`,
+   `SBOARD_KEY_ALIAS`, `SBOARD_KEY_PASSWORD`), чтобы release-APK был подписан постоянным ключом.
+3. Проверка на реальных устройствах: включение клавиатуры, службы автозаполнения и поставщика
+   passkeys выполняется пользователем в системных настройках Android.
 
-### Implemented foundations
+## Статус проверки
 
-- One Android app with Home, Keyboard, Vault, Tools, and Profile sections.
-- A system keyboard with Russian and English input, symbols, digits, emoji, clipboard paste, rounded keys, themes, and haptics. Voice typing uses Android SpeechRecognizer: on-device where available; network-backed system recognition requires separate consent.
-- A local vault with encrypted records, a master password, biometric unlock, and a Recovery Key.
-- An Autofill service for supported credentials, a password generator, TOTP, and encrypted Google Drive backups.
-- Russian and English app localization.
-
-### Limitations
-
-Autocorrection, predictive typing, T9, a user dictionary, clipboard history, complete WebAuthn/passkey integration, and seamless cross-device change synchronization are unfinished. Google Drive currently provides encrypted backups; this does not yet guarantee continuous conflict resolution or bidirectional synchronization. IME, Autofill, and biometrics still require real-device verification. See `BUILD_STATUS.md`, `PASSKEY_PROVIDER_STATUS.md`, and `SYNC_STATUS.md`.
-
-The app has no separate AI assistant. Do not enter real secrets into a development build before independently reviewing security and backup recovery.
-
-### Build
-
-Requires JDK 17, Android SDK Platform 36, and Build Tools 36.0.0. Run:
-
-```sh
-./gradlew testDebugUnitTest :app:assembleDebug
-```
-
-The debug APK is written to `app/build/outputs/apk/debug/`. Use `gradlew.bat` on Windows. GitHub Actions runs unit tests and builds the debug APK on pushes and pull requests to `main`. Google Drive OAuth requires a configured Google Cloud/Android OAuth client and app configuration. Never commit credentials or signing keys. See `GOOGLE_DRIVE_SETUP.md`.
+- Сборка debug APK, unit-тесты криптографии, формата резервной копии, слияния, TOTP, WebAuthn,
+  сопоставления доменов — проходят локально.
+- Интеграционные тесты Robolectric: полный цикл хранилища, миграция базы с v8, синхронизация
+  двух устройств через эмулированный Google Drive (создание → восстановление → правки → удаления →
+  смена мастер-пароля → Recovery Key → объединение хранилищ → защита от повреждённой копии),
+  smoke-тест запуска `MainActivity` (онбординг, экран блокировки, главный экран). Всего 88 тестов.
+- Собираются `app-debug.apk` и `app-release-unsigned.apk` (подпись — через секреты CI).
+- Не проверено в этой среде (нет Android-устройства/эмулятора с аппаратным ускорением):
+  реальный вход Google, работа IME/Autofill/Credential Manager в системе, биометрия на устройстве.

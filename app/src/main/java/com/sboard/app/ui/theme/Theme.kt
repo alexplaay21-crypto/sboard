@@ -131,7 +131,18 @@ fun isDarkTheme(): Boolean = when (AppSettings.themeMode.value) {
 
 @Composable
 fun SBoardTheme(content: @Composable () -> Unit) {
-    val palette = if (isDarkTheme()) DarkPalette else LightPalette
+    val dark = isDarkTheme()
+    val palette = if (dark) DarkPalette else LightPalette
+    val view = androidx.compose.ui.platform.LocalView.current
+    if (!view.isInEditMode) {
+        androidx.compose.runtime.SideEffect {
+            val window = (view.context as? android.app.Activity)?.window ?: return@SideEffect
+            androidx.core.view.WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !dark
+                isAppearanceLightNavigationBars = !dark
+            }
+        }
+    }
     CompositionLocalProvider(LocalPalette provides palette) {
         MaterialTheme(
             colorScheme = scheme(palette),

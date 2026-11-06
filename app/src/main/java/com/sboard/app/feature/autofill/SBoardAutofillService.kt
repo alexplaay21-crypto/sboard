@@ -43,10 +43,11 @@ class SBoardAutofillService : AutofillService() {
             val response = FillResponse.Builder()
             val session = VaultSessionProvider.session
             var datasets = 0
+            val inlineRequest = if (Build.VERSION.SDK_INT >= 30) request.inlineSuggestionsRequest else null
             if (session.isUnlocked) {
                 val items = kotlinx.coroutines.withTimeoutOrNull(2500) { VaultRepository.get(this@SBoardAutofillService).snapshot() }.orEmpty()
                 AutofillDatasets.matching(items, form).forEachIndexed { index, item ->
-                    AutofillDatasets.lockedDataset(this, item, form, 1000 + index)?.let { response.addDataset(it); datasets++ }
+                    AutofillDatasets.lockedDataset(this, item, form, 1000 + index, inlineRequest, datasets)?.let { response.addDataset(it); datasets++ }
                 }
             }
             // Always offer an entry to unlock / search the Vault (also links the site or app to a login).
@@ -57,6 +58,10 @@ class SBoardAutofillService : AutofillService() {
             response.addDataset(Dataset.Builder(pickPresentation).apply {
                 form.allIds.forEach { setValue(it, null, pickPresentation) }
                 setAuthentication(AutofillDatasets.pendingIntentSender(this@SBoardAutofillService, pickIntent, 999))
+                if (Build.VERSION.SDK_INT >= 30) {
+                    AutofillDatasets.inlinePresentation(this@SBoardAutofillService, inlineRequest, datasets,
+                        if (session.isUnlocked) tr("Выбрать в sBoard") else tr("Разблокировать sBoard"), null)?.let { setInlinePresentation(it) }
+                }
             }.build())
             datasets++
             if (form.passwordIds.isNotEmpty()) {

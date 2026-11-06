@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <autofill-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:settingsActivity="com.sboard.app.MainActivity"
-    android:supportsInlineSuggestions="false">
+    android:supportsInlineSuggestions="true">
     <!-- Compatibility mode for browsers that do not expose a native Autofill structure. -->
     <compatibility-package android:name="com.sec.android.app.sbrowser" android:maxLongVersionCode="10000000000" />
     <compatibility-package android:name="com.sec.android.app.sbrowser.beta" android:maxLongVersionCode="10000000000" />

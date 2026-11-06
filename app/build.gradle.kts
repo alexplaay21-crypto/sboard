@@ -66,6 +66,8 @@ android {
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
+        unitTests.isIncludeAndroidResources = true
+        unitTests.all { it.maxHeapSize = "2g" }
     }
 }
 
@@ -86,6 +88,7 @@ dependencies {
 
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.credentials:credentials:1.5.0")
+    implementation("androidx.autofill:autofill:1.3.0")
     implementation("androidx.activity:activity-compose:1.12.0")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
@@ -118,4 +121,9 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20260814")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+    testImplementation("org.robolectric:robolectric:4.10.3")
+    testImplementation("androidx.test:core-ktx:1.6.1")
+    testImplementation("androidx.test.ext:junit:1.2.1")
+    testImplementation("androidx.work:work-testing:2.11.1")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 }

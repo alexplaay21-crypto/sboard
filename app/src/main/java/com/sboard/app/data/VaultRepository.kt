@@ -8,6 +8,7 @@ import com.sboard.app.feature.sync.SyncScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -158,5 +159,8 @@ class VaultRepository private constructor(
         fun get(context: Context): VaultRepository = instance ?: synchronized(this) {
             instance ?: VaultRepository(context.applicationContext, VaultSessionProvider.session).also { instance = it }
         }
+
+        @androidx.annotation.VisibleForTesting
+        fun resetForTests() = synchronized(this) { instance?.scope?.cancel(); instance = null }
     }
 }

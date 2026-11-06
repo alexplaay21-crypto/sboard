@@ -25,13 +25,12 @@ import java.io.IOException
  * another device wrote meanwhile) → mark items as confirmed. Nothing is considered synchronised
  * until the upload response is received.
  */
-class SyncEngine(context: Context) {
+class SyncEngine(context: Context, private val drive: DriveClient = DriveClient()) {
     private val app = context.applicationContext
     private val db = VaultDatabase.get(app)
     private val dao = db.items()
     private val keys = VaultKeyManager(app)
     private val session = VaultSessionProvider.session
-    private val drive = DriveClient()
 
     sealed class Outcome {
         data class Success(val pulled: Int, val pushed: Int, val conflicts: Int) : Outcome()

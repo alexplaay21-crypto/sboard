@@ -2,7 +2,7 @@ name: Android APK
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, 'claude/**' ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -10,13 +10,19 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
-    name: Build debug APK
+    name: Test and build APKs
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      HAS_KEYSTORE: ${{ secrets.SBOARD_KEYSTORE_BASE64 != '' }}
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -31,23 +37,52 @@ jobs:
         run: echo "${ANDROID_HOME}/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
 
       - name: Install Android SDK packages
-        run: sdkmanager --install "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+        run: yes | sdkmanager --install "platform-tools" "platforms;android-36" "build-tools;36.0.0" "build-tools;35.0.0" > /dev/null
 
-      - name: Set up Gradle 8.13
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+
+      - name: Check translations
+        run: python3 scripts/check_translations.py
+
+      - name: Run unit and integration tests
+        run: ./gradlew --no-daemon :app:testDebugUnitTest
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          gradle-version: '8.13'
+          name: sBoard-test-reports
+          path: app/build/reports/tests/testDebugUnitTest
+          if-no-files-found: ignore
+          retention-days: 7
 
-      - name: Run unit tests
-        run: gradle --no-daemon :app:testDebugUnitTest
+      - name: Decode release keystore
+        if: env.HAS_KEYSTORE == 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.SBOARD_KEYSTORE_BASE64 }}
+        run: echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/sboard-release.jks"
 
-      - name: Build debug APK
-        run: gradle --no-daemon :app:assembleDebug
+      - name: Build debug and release APKs
+        env:
+          SBOARD_KEYSTORE_PATH: ${{ runner.temp }}/sboard-release.jks
+          SBOARD_KEYSTORE_PASSWORD: ${{ secrets.SBOARD_KEYSTORE_PASSWORD }}
+          SBOARD_KEY_ALIAS: ${{ secrets.SBOARD_KEY_ALIAS }}
+          SBOARD_KEY_PASSWORD: ${{ secrets.SBOARD_KEY_PASSWORD }}
+        run: ./gradlew --no-daemon :app:assembleDebug :app:assembleRelease
 
-      - name: Upload APK
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: sBoard-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: sBoard-release-apk
+          path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 14

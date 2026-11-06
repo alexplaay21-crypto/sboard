@@ -22,12 +22,15 @@ class DriveHttpException(val status: Int, message: String) : IOException(message
 /** Minimal Google Drive v3 REST client restricted to the hidden appDataFolder space. */
 class DriveClient(
     private val http: OkHttpClient = defaultClient,
+    private val api: String = API,
+    private val upload: String = UPLOAD,
+    private val userInfoUrl: String = "https://www.googleapis.com/oauth2/v3/userinfo",
 ) {
     data class RemoteFile(val id: String, val version: Long, val modifiedTime: String?, val size: Long, val md5: String?)
 
     suspend fun findBackups(token: String): List<RemoteFile> = withContext(Dispatchers.IO) {
         val q = URLEncoder.encode("name = '${BackupFormat.FILE_NAME}' and trashed = false", "UTF-8")
-        val url = "$API/files?spaces=appDataFolder&q=$q&orderBy=modifiedTime%20desc&pageSize=10" +
+        val url = "$api/files?spaces=appDataFolder&q=$q&orderBy=modifiedTime%20desc&pageSize=10" +
             "&fields=files(id,version,modifiedTime,size,md5Checksum)"
         execute(token, Request.Builder().url(url).get(), "list").use { response ->
             val files = JSONObject(response.body!!.string()).optJSONArray("files") ?: return@withContext emptyList()
@@ -36,14 +39,14 @@ class DriveClient(
     }
 
     suspend fun metadata(token: String, fileId: String): RemoteFile = withContext(Dispatchers.IO) {
-        execute(token, Request.Builder().url("$API/files/$fileId?fields=id,version,modifiedTime,size,md5Checksum").get(), "metadata").use {
+        execute(token, Request.Builder().url("$api/files/$fileId?fields=id,version,modifiedTime,size,md5Checksum").get(), "metadata").use {
             parseFile(JSONObject(it.body!!.string()))
         }
     }
 
     /** Downloads the file and verifies Drive's MD5 checksum (transport integrity). */
     suspend fun download(token: String, file: RemoteFile): ByteArray = withContext(Dispatchers.IO) {
-        execute(token, Request.Builder().url("$API/files/${file.id}?alt=media").get(), "download").use { response ->
+        execute(token, Request.Builder().url("$api/files/${file.id}?alt=media").get(), "download").use { response ->
             val bytes = response.body!!.bytes()
             val md5 = file.md5
             if (md5 != null) {
@@ -61,7 +64,7 @@ class DriveClient(
             .put("mimeType", MIME)
             .put("appProperties", JSONObject().put("sboardFormat", BackupFormat.FORMAT_VERSION.toString()).put("generation", generation.toString()))
         val body = multipart(metadata, content)
-        execute(token, Request.Builder().url("$UPLOAD/files?uploadType=multipart&fields=id,version,modifiedTime,size,md5Checksum").post(body), "upload").use {
+        execute(token, Request.Builder().url("$upload/files?uploadType=multipart&fields=id,version,modifiedTime,size,md5Checksum").post(body), "upload").use {
             parseFile(JSONObject(it.body!!.string()))
         }
     }
@@ -71,19 +74,19 @@ class DriveClient(
         val metadata = JSONObject().put("appProperties",
             JSONObject().put("sboardFormat", BackupFormat.FORMAT_VERSION.toString()).put("generation", generation.toString()))
         val body = multipart(metadata, content)
-        execute(token, Request.Builder().url("$UPLOAD/files/$fileId?uploadType=multipart&fields=id,version,modifiedTime,size,md5Checksum").patch(body), "update").use {
+        execute(token, Request.Builder().url("$upload/files/$fileId?uploadType=multipart&fields=id,version,modifiedTime,size,md5Checksum").patch(body), "update").use {
             parseFile(JSONObject(it.body!!.string()))
         }
     }
 
     suspend fun delete(token: String, fileId: String) = withContext(Dispatchers.IO) {
-        execute(token, Request.Builder().url("$API/files/$fileId").delete(), "delete").close()
+        execute(token, Request.Builder().url("$api/files/$fileId").delete(), "delete").close()
     }
 
     /** Basic Google profile for the Profile screen (requires userinfo scopes). */
     suspend fun userInfo(token: String): Pair<String, String>? = withContext(Dispatchers.IO) {
         runCatching {
-            execute(token, Request.Builder().url("https://www.googleapis.com/oauth2/v3/userinfo").get(), "profile").use {
+            execute(token, Request.Builder().url(userInfoUrl).get(), "profile").use {
                 val json = JSONObject(it.body!!.string())
                 json.optString("email") to json.optString("name")
             }
