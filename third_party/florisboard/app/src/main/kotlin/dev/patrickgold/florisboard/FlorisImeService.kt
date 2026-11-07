@@ -162,11 +162,10 @@ class FlorisImeService : LifecycleInputMethodService() {
             // Modified for sBoard: open the bundled Floris runtime settings in-app.
             val ims = FlorisImeServiceReference.get() ?: return
             ims.requestHideSelf(0)
-            val settingsIntent = Intent(ims, dev.patrickgold.florisboard.app.FlorisAppActivity::class.java)
-            settingsIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            settingsIntent.data = android.net.Uri.parse("ui://florisboard/settings/keyboard")
-            settingsIntent.action = Intent.ACTION_VIEW
-            settingsIntent.addCategory(Intent.CATEGORY_BROWSABLE)
+            // Modified for sBoard: the keyboard is configured in the sBoard app (Keyboard tab).
+            val settingsIntent = Intent().setClassName(ims.packageName, "com.sboard.app.MainActivity")
+                .putExtra("sboard.open_tab", "keyboard")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             ims.startActivity(settingsIntent)
         }
 
@@ -367,6 +366,11 @@ class FlorisImeService : LifecycleInputMethodService() {
             }
             activeState.isSelectionMode = editorInfo.initialSelection.isSelectionMode
             editorInstance.handleStartInputView(editorInfo, isRestart = restarting)
+        }
+        if (!restarting) org.sboard.keyboard.SBoardVaultBridge.translateBarVisible.value = false
+        // Modified for sBoard: commit a Vault value the user approved in the confirmation activity.
+        org.sboard.keyboard.SBoardVaultBridge.consumePending(editorInfo.packageName)?.let { text ->
+            android.os.Handler(mainLooper).postDelayed({ editorInstance.commitText(text) }, 120)
         }
     }
 
@@ -677,10 +681,19 @@ class FlorisImeService : LifecycleInputMethodService() {
                                 .weight(keyboardWeight)
                                 .wrapContentHeight(),
                         ) {
-                            when (state.imeUiMode) {
+                            // Modified for sBoard: live translation bar above the keys.
+                            val translateBar by org.sboard.keyboard.SBoardVaultBridge.translateBarVisible.collectAsState()
+                            if (translateBar && state.imeUiMode == ImeUiMode.TEXT) {
+                                androidx.compose.foundation.layout.Column {
+                                    org.sboard.keyboard.TranslateBar()
+                                    TextInputLayout()
+                                }
+                            } else when (state.imeUiMode) {
                                 ImeUiMode.TEXT -> TextInputLayout()
                                 ImeUiMode.MEDIA -> MediaInputLayout()
                                 ImeUiMode.CLIPBOARD -> ClipboardInputLayout()
+                                ImeUiMode.VAULT -> org.sboard.keyboard.VaultInputLayout()
+                                ImeUiMode.TRANSLATE -> org.sboard.keyboard.TranslateInputLayout()
                             }
                         }
                     }

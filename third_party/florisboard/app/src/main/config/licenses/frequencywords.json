@@ -1,0 +1,6 @@
+{
+  "hash": "frequencywords-cc-by-sa-4.0",
+  "name": "FrequencyWords Russian 50k (CC BY-SA 4.0)",
+  "url": "https://github.com/hermitdave/FrequencyWords",
+  "content": "Word frequency content (content/2018/ru/ru_50k.txt) by Hermit Dave, https://github.com/hermitdave/FrequencyWords, licensed under CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/). sBoard ships a filtered (Cyrillic-only, 2–30 letters), re-ranked derivative merged with the CC BY 2.5 Russian 10k list in assets/ime/dict/russian_words.txt, distributed under CC BY-SA 4.0."
+}

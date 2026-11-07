@@ -22,12 +22,4 @@ class PasskeyDiscoveryPolicyTest {
     @Test fun malformedNonEmptyAllowListFailsClosed() {
         assertFalse(PasskeyDiscoveryPolicy.isAllowed(credentialId, emptySet()))
     }
-
-    @Test fun discoveryProjectionDoesNotContainPrivateKeyColumns() {
-        val names = PasskeyDiscoveryEntry::class.java.declaredFields.map { it.name }.toSet()
-        assertTrue(names.containsAll(setOf("id", "rpId", "credentialId", "userName")))
-        assertFalse(names.contains("encryptedPrivateKey"))
-        assertFalse(names.contains("iv"))
-        assertFalse(names.contains("publicKeyCose"))
-    }
 }

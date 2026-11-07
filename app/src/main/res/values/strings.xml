@@ -1,23 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">sBoard</string>
-    <string name="ime_name">sBoard (резервная)</string>
-    <string name="ime_subtype_ru">Русский</string>
-    <string name="ime_subtype_en">English</string>
-    <string name="ime_private_input">sBoard • приватный ввод</string>
-    <string name="ime_voice_input">Голосовой ввод</string>
-    <string name="ime_stop_voice_input">Остановить голосовой ввод</string>
-    <string name="ime_grant_microphone_in_app">Разрешите микрофон в настройках клавиатуры sBoard</string>
-    <string name="ime_offline_speech_unavailable">Офлайн-распознавание недоступно. Разрешите системное распознавание в настройках</string>
-    <string name="ime_listening">Слушаю…</string>
-    <string name="ime_recognizing">Распознаю…</string>
-    <string name="ime_speech_failed">Не удалось распознать речь. Попробуйте ещё раз</string>
-    <string name="ime_no_speech_result">Речь не распознана</string>
-    <string name="autofill_service_name">sBoard Autofill</string>
-    <string name="ime_paste_from_clipboard">Вставить текст из буфера обмена</string>
-    <string name="ime_backspace">Удалить символ</string>
-    <string name="sboard_floris_ime_name">Клавиатура sBoard</string>
-    <string name="ime_symbols">Символы</string>
-    <string name="ime_emoji">Эмодзи</string>
-    <string name="ime_hide_keyboard">Скрыть клавиатуру</string>
+    <string name="autofill_service_name">sBoard Автозаполнение</string>
+    <string name="otp_listener_name">sBoard: коды подтверждения</string>
 </resources>

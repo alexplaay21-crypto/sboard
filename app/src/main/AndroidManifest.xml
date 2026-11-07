@@ -1,67 +1,109 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.VIBRATE" />
-    <queries>
-        <intent>
-            <action android:name="android.speech.RecognitionService" />
-        </intent>
-    </queries>
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+
     <application
         android:name=".SBoardApplication"
         android:allowBackup="false"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@mipmap/ic_sboard"
+        android:roundIcon="@mipmap/ic_sboard"
         android:label="@string/app_name"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar"
-        android:supportsRtl="true">
-        <service
-            android:name=".keyboard.SBoardInputMethodService"
-            android:label="@string/ime_name"
-            android:permission="android.permission.BIND_INPUT_METHOD"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.view.InputMethod" />
-            </intent-filter>
-            <meta-data
-                android:name="android.view.im"
-                android:resource="@xml/sboard_input_method" />
-        </service>
-        <service
-            android:name=".feature.passkeys.SBoardCredentialProviderService"
-            android:label="@string/credential_provider_name"
-            android:permission="android.permission.BIND_CREDENTIAL_PROVIDER_SERVICE"
-            android:exported="true"
-            android:enabled="@bool/credential_provider_enabled">
-            <intent-filter>
-                <action android:name="android.service.credentials.CredentialProviderService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.credentials.provider"
-                android:resource="@xml/sboard_credential_provider" />
-        </service>
+        android:supportsRtl="true"
+        android:theme="@style/Theme.SBoard"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:localeConfig="@xml/locales_config"
+        tools:replace="android:allowBackup,android:icon,android:roundIcon,android:label,android:theme"
+        tools:targetApi="34">
+
         <activity
-            android:name=".feature.passkeys.PasskeySelectionActivity"
-            android:exported="false"
-            android:excludeFromRecents="true"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Android Autofill Framework -->
         <service
-            android:name=".autofill.SBoardAutofillService"
+            android:name=".feature.autofill.SBoardAutofillService"
             android:label="@string/autofill_service_name"
             android:permission="android.permission.BIND_AUTOFILL_SERVICE"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.service.autofill.AutofillService" />
             </intent-filter>
-            <meta-data
-                android:name="android.autofill"
-                android:resource="@xml/sboard_autofill_service" />
+            <meta-data android:name="android.autofill" android:resource="@xml/sboard_autofill_service" />
         </service>
         <activity
-            android:name=".MainActivity"
+            android:name=".feature.autofill.AutofillActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.SBoard" />
+        <activity
+            android:name=".feature.autofill.AutofillSaveActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.SBoard" />
+
+        <!-- Credential Manager (passkeys), Android 14+ -->
+        <service
+            android:name=".feature.passkeys.SBoardCredentialProviderService"
+            android:label="@string/credential_provider_name"
+            android:icon="@mipmap/ic_sboard"
+            android:permission="android.permission.BIND_CREDENTIAL_PROVIDER_SERVICE"
+            android:enabled="@bool/credential_provider_enabled"
             android:exported="true">
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
+                <action android:name="android.service.credentials.CredentialProviderService" />
             </intent-filter>
-        </activity>
+            <meta-data android:name="android.credentials.provider" android:resource="@xml/sboard_credential_provider" />
+        </service>
+        <activity
+            android:name=".feature.passkeys.PasskeyActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.SBoard" />
+
+        <!-- One-time codes from notifications (explicit notification access required) -->
+        <service
+            android:name=".feature.otpinbox.OtpNotificationListener"
+            android:label="@string/otp_listener_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!-- Keyboard: unlock / confirmation before inserting Vault secrets -->
+        <activity
+            android:name=".feature.keyboard.KeyboardAuthActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity="com.sboard.app.keyboardauth"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.SBoard" />
+
+        <!-- QR scanner (ZXing) in portrait-independent mode -->
+        <activity
+            android:name="com.journeyapps.barcodescanner.CaptureActivity"
+            android:screenOrientation="fullSensor"
+            tools:replace="screenOrientation" />
     </application>
 </manifest>

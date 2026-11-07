@@ -2,7 +2,7 @@
   "$": "ime.extension.theme",
   "meta": {
     "id": "org.sboard.themes",
-    "version": "1.0.0",
+    "version": "1.2.0",
     "title": "sBoard keyboard themes",
     "description": "sBoard light and dark themes, adapted from FlorisBoard v0.5.2 theme stylesheets under Apache-2.0.",
     "maintainers": [
@@ -11,6 +11,22 @@
     "license": "apache-2.0"
   },
   "themes": [
+    {
+      "id": "sboard_custom_day",
+      "label": "sBoard Custom (Day)",
+      "authors": [
+        "sBoard contributors"
+      ],
+      "isNight": false
+    },
+    {
+      "id": "sboard_custom_night",
+      "label": "sBoard Custom (Night)",
+      "authors": [
+        "sBoard contributors"
+      ],
+      "isNight": true
+    },
     {
       "id": "sboard_light",
       "label": "sBoard Light",

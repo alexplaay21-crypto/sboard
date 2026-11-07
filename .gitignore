@@ -8,3 +8,6 @@ local.properties
 *.keystore
 keystore.properties
 secrets.properties
+
+# Shared, non-secret debug signing key so every debug build has the same SHA-1 (Google OAuth).
+!app/debug.keystore

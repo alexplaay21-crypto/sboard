@@ -15,7 +15,7 @@ class RankedWordListTest {
 
     @Test
     fun `rejects punctuation and one-letter fragments`() {
-        assertEquals(mapOf("слово" to 10_000), RankedWordList.parse("а\nслово!\nслово\n"))
+        assertEquals(mapOf("слово" to RankedWordList.MAX_RANK), RankedWordList.parse("а\nслово!\nслово\n"))
     }
 
     @Test

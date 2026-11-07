@@ -29,7 +29,7 @@ class WebAuthnRegistrationEngineTest {
         assertEquals(32, result.credentialId.size)
         assertArrayEquals(byteArrayOf(9, 8, 7), result.userHandle)
         assertEquals(0L, result.signCount)
-        assertEquals(0x45, result.authenticatorData[32].toInt())
+        assertEquals(0x5D, result.authenticatorData[32].toInt())
         assertTrue(result.authenticatorData.size > 37 + 16 + 2 + 32)
         assertEquals(0xa3.toByte(), result.attestationObject[0]) // three-entry CBOR map
         val clientData = JSONObject(String(result.clientDataJson))

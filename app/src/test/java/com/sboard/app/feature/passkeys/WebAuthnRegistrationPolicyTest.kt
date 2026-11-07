@@ -27,9 +27,9 @@ class WebAuthnRegistrationPolicyTest {
         WebAuthnRegistrationPolicy.validate(invalid, "example.com", "https://example.com")
     }
 
-    @Test(expected = IllegalArgumentException::class)
-    fun rejectsUnsupportedExtensions() {
-        WebAuthnRegistrationPolicy.validate(request(",\"extensions\":{\"credProps\":true}"), "example.com", "https://example.com")
+    @Test fun acceptsCredPropsExtension() {
+        val validated = WebAuthnRegistrationPolicy.validate(request(",\"extensions\":{\"credProps\":true}"), "example.com", "https://example.com")
+        assertTrue(validated.credPropsRequested)
     }
 
     @Test(expected = IllegalArgumentException::class)

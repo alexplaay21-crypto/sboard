@@ -28,14 +28,21 @@ object WebAuthnRegistrationEngine {
         val clientDataJson: ByteArray,
         val authenticatorData: ByteArray,
         val attestationObject: ByteArray,
-        val signCount: Long = 0L
+        val signCount: Long = 0L,
+        val rpId: String = "",
+        val rpName: String = "",
+        val userName: String = "",
+        val displayName: String = "",
+        val credProps: Boolean = false,
     ) {
         fun toCredentialResponseJson(): String = JSONObject().apply {
             put("id", credentialId.base64Url())
             put("rawId", credentialId.base64Url())
             put("type", "public-key")
             put("authenticatorAttachment", "platform")
-            put("clientExtensionResults", JSONObject())
+            put("clientExtensionResults", JSONObject().apply {
+                if (credProps) put("credProps", JSONObject().put("rk", true))
+            })
             put("response", JSONObject().apply {
                 put("clientDataJSON", clientDataJson.base64Url())
                 put("attestationObject", attestationObject.base64Url())
@@ -70,8 +77,8 @@ object WebAuthnRegistrationEngine {
 
         val rpIdHash = MessageDigest.getInstance("SHA-256")
             .digest(rpId.toByteArray(StandardCharsets.UTF_8))
-        // UP=1, UV=1, AT=1. No extension data; signCount starts at zero.
-        val flags: Byte = 0x45
+        // UP=1, UV=1, BE=1, BS=1 (synced via encrypted Vault), AT=1. Synced passkeys keep signCount 0.
+        val flags: Byte = 0x5D
         val aaguid = ByteArray(16)
         val authData = ByteArrayOutputStream().apply {
             write(rpIdHash)
@@ -92,7 +99,9 @@ object WebAuthnRegistrationEngine {
 
         return Registration(
             credentialId.copyOf(), userHandle.copyOf(), keyPair.private.encoded.copyOf(),
-            coseKey, clientData, authData, attestationObject
+            coseKey, clientData, authData, attestationObject,
+            rpId = rpId, rpName = validated.rpName, userName = validated.userName,
+            displayName = validated.displayName, credProps = validated.credPropsRequested,
         )
     }
 

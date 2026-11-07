@@ -12,14 +12,14 @@ import android.os.Build
 class CallingAppOriginResolver(
     private val assetLinksVerifier: DigitalAssetLinksVerifier = DigitalAssetLinksVerifier()
 ) {
-    suspend fun resolveVerified(callingAppInfo: CallingAppInfo, rpId: String): String {
+    suspend fun resolveVerified(callingAppInfo: CallingAppInfo, rpId: String, privilegedAllowlist: String = PRIVILEGED_CALLER_ALLOWLIST): String {
         require(callingAppInfo.packageName.isNotBlank()) { "Missing calling package" }
         val normalizedRpId = requireNotNull(WebAuthnOriginPolicy.normalizeRpId(rpId)) {
             "Invalid relying-party ID"
         }
 
         val delegatedOrigin = try {
-            callingAppInfo.getOrigin(PRIVILEGED_CALLER_ALLOWLIST)
+            callingAppInfo.getOrigin(privilegedAllowlist)
         } catch (error: Exception) {
             throw SecurityException("Untrusted delegated origin", error)
         }
@@ -57,7 +57,7 @@ class CallingAppOriginResolver(
     }
 
     companion object {
-        // Browser delegation is intentionally disabled until release package fingerprints are reviewed.
-        private const val PRIVILEGED_CALLER_ALLOWLIST = """{"apps": []}"""
+        /** Used only when no allowlist is supplied: browsers then cannot delegate origins (fail closed). */
+        const val PRIVILEGED_CALLER_ALLOWLIST = """{"apps": []}"""
     }
 }

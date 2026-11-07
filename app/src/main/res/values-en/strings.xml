@@ -1,23 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">sBoard</string>
-    <string name="ime_name">sBoard (Classic)</string>
-    <string name="ime_subtype_ru">Russian</string>
-    <string name="ime_subtype_en">English</string>
-    <string name="ime_private_input">sBoard • private input</string>
-    <string name="ime_voice_input">Voice typing</string>
-    <string name="ime_stop_voice_input">Stop voice typing</string>
-    <string name="ime_grant_microphone_in_app">Allow microphone access in sBoard keyboard settings</string>
-    <string name="ime_offline_speech_unavailable">Offline recognition is unavailable. Allow system recognition in settings</string>
-    <string name="ime_listening">Listening…</string>
-    <string name="ime_recognizing">Recognizing…</string>
-    <string name="ime_speech_failed">Speech recognition failed. Try again</string>
-    <string name="ime_no_speech_result">No speech was recognized</string>
     <string name="autofill_service_name">sBoard Autofill</string>
-    <string name="ime_paste_from_clipboard">Paste from clipboard</string>
-    <string name="ime_backspace">Delete character</string>
-    <string name="sboard_floris_ime_name">sBoard Keyboard</string>
-    <string name="ime_symbols">Symbols</string>
-    <string name="ime_emoji">Emoji</string>
-    <string name="ime_hide_keyboard">Hide keyboard</string>
+    <string name="otp_listener_name">sBoard: verification codes</string>
 </resources>
