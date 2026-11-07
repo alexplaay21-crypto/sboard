@@ -32,7 +32,9 @@ fun Context.systemVibratorOrNull(): Vibrator? {
 
 fun Vibrator.vibrate(duration: Int, strength: Int, factor: Double = 1.0) {
     if (duration == 0 || strength == 0) return
-    val effectiveDuration = (duration * factor).toLong().coerceAtLeast(1L)
+    // sBoard: without amplitude control the strength setting scales the pulse length instead.
+    val lengthScale = if (this.hasAmplitudeControl()) 1.0 else (0.35 + strength / 100.0)
+    val effectiveDuration = (duration * factor * lengthScale).toLong().coerceAtLeast(1L)
     val effectiveStrength = when {
         this.hasAmplitudeControl() -> (255.0 * ((strength * factor) / 100.0)).toInt().coerceIn(1, 255)
         else -> VibrationEffect.DEFAULT_AMPLITUDE

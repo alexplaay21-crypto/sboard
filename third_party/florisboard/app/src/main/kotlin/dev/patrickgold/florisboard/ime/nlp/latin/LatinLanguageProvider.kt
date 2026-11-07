@@ -54,7 +54,7 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
     override val providerId = ProviderId
 
     override suspend fun create() {
-        // Here we initialize our provider, set up all things which are not language dependent.
+        org.sboard.keyboard.SBoardUserModel.init(appContext)
     }
 
     override suspend fun preload(subtype: Subtype) = withContext(Dispatchers.IO) {
@@ -108,6 +108,7 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
         val language = subtype.primaryLocale.language
         if (language != "en" && language != "ru") return SpellingResult.unspecified()
         val normalized = word.lowercase(Locale.ROOT)
+        if (org.sboard.keyboard.SBoardUserModel.count(language, normalized) >= 2) return SpellingResult.validWord()
         if (normalized.isBlank() || normalized.any { !it.isLetter() && it != '\'' && it != '’' }) {
             return SpellingResult.unspecified()
         }
@@ -132,24 +133,69 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
         isPrivateSession: Boolean,
     ): List<SuggestionCandidate> {
         if (isPrivateSession) return emptyList()
+        // Modified for sBoard: personal dictionary + shortcuts, learned words, next-word prediction
+        // and conservative auto-correction, for every language (built-in dictionaries for RU/EN).
         val language = subtype.primaryLocale.language
-        if (language != "en" && language != "ru") return emptyList()
+        val textBefore = content.textBeforeSelection
+        withContext(Dispatchers.Default) { org.sboard.keyboard.SBoardUserModel.learnFromContext(language, textBefore) }
         val originalQuery = content.currentWordText.ifBlank { content.composingText }
         val query = originalQuery.lowercase(Locale.ROOT)
-        if (query.isBlank()) return emptyList()
+        if (query.isBlank()) return nextWordSuggestions(language, textBefore, maxCandidateCount)
+        val personal = personalDictionary(query, subtype)
         return wordData.withLock { dictionaries ->
-            val dictionary = dictionaries[language] ?: return@withLock emptyList()
+            val dictionary = dictionaries[language] ?: emptyMap()
             val maxFrequency = if (language == "ru") RankedWordList.MAX_RANK else 255
-            LatinWordEngine.suggest(query, dictionary, maxCandidateCount)
-                .filter { allowPossiblyOffensive || it.word !in BLOCKED_WORDS }
-                .map { match ->
-                    WordSuggestionCandidate(
-                        text = LatinWordEngine.preserveCase(originalQuery, match.word),
-                        confidence = (match.frequency.toDouble() / maxFrequency.toDouble()).coerceIn(0.0, 1.0),
-                        isEligibleForAutoCommit = false,
-                        sourceProvider = this,
-                    )
+            val known = query in dictionary || org.sboard.keyboard.SBoardUserModel.count(language, query) >= 2 ||
+                personal.any { it.first.equals(query, ignoreCase = true) }
+            val results = LinkedHashMap<String, WordSuggestionCandidate>()
+            fun add(word: String, confidence: Double, autoCommit: Boolean = false) {
+                val text = LatinWordEngine.preserveCase(originalQuery, word)
+                if (!allowPossiblyOffensive && word.lowercase(Locale.ROOT) in BLOCKED_WORDS) return
+                if (text.lowercase(Locale.ROOT) in results) return
+                results[text.lowercase(Locale.ROOT)] = WordSuggestionCandidate(
+                    text = text, confidence = confidence.coerceIn(0.0, 1.0),
+                    isEligibleForAutoCommit = autoCommit, sourceProvider = this,
+                )
+            }
+            // 1. Text shortcuts from the personal dictionary ("др" → "день рождения").
+            personal.filter { it.second }.forEach { add(it.first, 1.0) }
+            // 2. Auto-correction of an unknown word with one typo to a frequent dictionary word.
+            if (!known && org.sboard.keyboard.SBoardUserModel.autoCorrectEnabled && query.length >= 4) {
+                LatinWordEngine.correct(query, dictionary, 3).firstOrNull()?.let { best ->
+                    val share = best.frequency.toDouble() / maxFrequency
+                    if (share > 0.6) add(best.word, share, autoCommit = true)
                 }
+            }
+            // 3. Words the user types often, then personal dictionary words, then the dictionary.
+            org.sboard.keyboard.SBoardUserModel.complete(language, query, 3).forEach { (w, n) -> add(w, 0.5 + n / 200.0) }
+            personal.filter { !it.second }.forEach { add(it.first, 0.9) }
+            LatinWordEngine.suggest(query, dictionary, maxCandidateCount).forEach { match ->
+                val boost = org.sboard.keyboard.SBoardUserModel.count(language, match.word) / 50.0
+                add(match.word, match.frequency.toDouble() / maxFrequency + boost)
+            }
+            results.values.take(maxCandidateCount)
+        }
+    }
+
+    /** Personal dictionary entries for [query]: (word, isShortcutMatch). */
+    private fun personalDictionary(query: String, subtype: Subtype): List<Pair<String, Boolean>> = runCatching {
+        val dao = dev.patrickgold.florisboard.ime.dictionary.DictionaryManager.default().let {
+            it.loadUserDictionariesIfNecessary(); it.florisUserDictionaryDao()
+        } ?: return emptyList()
+        val shortcuts = dao.queryShortcut(query, subtype.primaryLocale).map { it.word to true }
+        val words = dao.query(query, subtype.primaryLocale)
+            .filter { it.word.lowercase(Locale.ROOT).startsWith(query) }
+            .sortedByDescending { it.freq }.take(3).map { it.word to false }
+        shortcuts + words
+    }.getOrDefault(emptyList())
+
+    private fun nextWordSuggestions(language: String, textBefore: String, limit: Int): List<SuggestionCandidate> {
+        if (textBefore.isEmpty() || !textBefore.last().isWhitespace()) return emptyList()
+        val previous = Regex("""([\p{L}'’-]+)\s*$""").find(textBefore.trimEnd())?.groupValues?.get(1) ?: return emptyList()
+        val capitalize = Regex("""[.!?]\s*$""").containsMatchIn(textBefore)
+        if (capitalize) return emptyList()
+        return org.sboard.keyboard.SBoardUserModel.nextWords(language, previous, limit).map { (word, n) ->
+            WordSuggestionCandidate(text = word, confidence = (0.3 + n / 50.0).coerceAtMost(1.0), isEligibleForAutoCommit = false, sourceProvider = this)
         }
     }
 
@@ -163,21 +209,38 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
     }
 
     override suspend fun removeSuggestion(subtype: Subtype, candidate: SuggestionCandidate): Boolean {
-        flogDebug { candidate.toString() }
-        return false
+        // Long-press on a suggestion forgets a learned word.
+        org.sboard.keyboard.SBoardUserModel.forget(subtype.primaryLocale.language, candidate.text.toString())
+        return true
     }
 
     override suspend fun getListOfWords(subtype: Subtype): List<String> {
-        return wordData.withLock { it[subtype.primaryLocale.language]?.keys?.toList().orEmpty() }
+        // Swipe typing also knows the user's own words (learned + personal dictionary).
+        val language = subtype.primaryLocale.language
+        val own = org.sboard.keyboard.SBoardUserModel.complete(language, "", 3000).map { it.first } +
+            runCatching { dev.patrickgold.florisboard.ime.dictionary.DictionaryManager.default().florisUserDictionaryDao()?.queryAll(subtype.primaryLocale)?.map { it.word.lowercase(Locale.ROOT) } }.getOrNull().orEmpty()
+        return wordData.withLock { it[language]?.keys?.toList().orEmpty() } + own.filter { w -> w.length >= 2 && w.all { c -> c.isLetter() || c == '\'' } }
     }
 
+    /**
+     * Word prior for swipe typing, calibrated to a probability-like scale (Zipf's law): the Russian
+     * list is rank-based, the English data uses a logarithmic 0..255 scale. Words the user types
+     * often are boosted.
+     */
     override suspend fun getFrequencyForWord(subtype: Subtype, word: String): Double {
-        return wordData.withLock {
-            val language = subtype.primaryLocale.language
-            val dictionary = it[language] ?: return@withLock 0.0
-            val maxFrequency = if (language == "ru") RankedWordList.MAX_RANK else 255
-            dictionary[word.lowercase(Locale.ROOT)]?.toDouble()?.div(maxFrequency.toDouble()) ?: 0.0
+        val language = subtype.primaryLocale.language
+        val normalized = word.lowercase(Locale.ROOT)
+        val base = wordData.withLock {
+            val dictionary = it[language]
+            val value = dictionary?.get(normalized)
+            when {
+                value == null -> 0.002
+                language == "ru" -> 300.0 / ((RankedWordList.MAX_RANK - value).coerceAtLeast(0) + 300.0)
+                else -> Math.pow(10.0, (value - 255) / 51.0)
+            }
         }
+        val learned = org.sboard.keyboard.SBoardUserModel.count(language, normalized)
+        return (base * (1.0 + learned / 3.0) + if (learned >= 2) 0.01 else 0.0).coerceIn(1e-6, 1.0)
     }
 
     override suspend fun destroy() {

@@ -62,35 +62,46 @@ private fun KeyboardThemeSpec.set(p: Part, c: Long): KeyboardThemeSpec = when (p
 
 private fun col(c: Long) = Color(c.toInt())
 
+/** Groups of related elements: tapping a region of the preview selects its group. */
+private val groups = listOf(
+    listOf(Part.KEYS, Part.KEY_TEXT, Part.HINTS),
+    listOf(Part.FUNCTION_KEYS, Part.FUNCTION_TEXT),
+    listOf(Part.TOOLBAR, Part.TOOLBAR_ICONS),
+    listOf(Part.ACCENT), listOf(Part.BORDER), listOf(Part.BACKGROUND),
+)
+private fun groupOf(p: Part) = groups.first { p in it }
+
 /** Keyboard theme editor in the spirit of Samsung Theme Park: tap any part of the preview and recolour it. */
 @Composable
 fun KeyboardThemeEditor(nav: Navigator) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var night by remember { mutableStateOf(true) }
+    val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
+    var night by remember { mutableStateOf(systemDark) }
     var spec by remember(night) { mutableStateOf(SBoardThemeStore.load(context, night)) }
     var part by remember { mutableStateOf(Part.KEYS) }
     var tab by remember { mutableStateOf("color") }
-    var saved by remember { mutableStateOf(false) }
     var confirmReset by remember { mutableStateOf(false) }
+    var dirty by remember { mutableStateOf(false) }
+
+    // Changes are applied to the keyboard automatically, shortly after the last edit.
+    LaunchedEffect(spec, night) {
+        if (!dirty) return@LaunchedEffect
+        kotlinx.coroutines.delay(350)
+        SBoardThemeStore.save(context, night, spec)
+        runCatching { SBoardKeyboardSettings.useCustomThemes() }
+    }
+    fun update(newSpec: KeyboardThemeSpec) { spec = newSpec; dirty = true }
 
     Column(Modifier.fillMaxSize()) {
         TopBar(tr("Тема клавиатуры"), { nav.pop() }) {
-            IconButton(onClick = { night = !night; saved = false }) {
-                Icon(if (night) Icons.Rounded.DarkMode else Icons.Rounded.LightMode, tr("День / ночь"), tint = palette.accent)
-            }
             IconButton(onClick = { confirmReset = true }) { Icon(Icons.Rounded.RestartAlt, tr("Сбросить"), tint = palette.textMuted) }
-            TextButton(onClick = {
-                SBoardThemeStore.save(context, night, spec)
-                scope.launch { runCatching { SBoardKeyboardSettings.useCustomThemes() } }
-                saved = true
-            }) { Text(tr("Применить"), color = palette.accent) }
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(if (night) tr("Тёмная тема · нажмите на любой элемент клавиатуры") else tr("Светлая тема · нажмите на любой элемент клавиатуры"),
+            SegmentedControl(listOf("night" to tr("Тёмная тема"), "day" to tr("Светлая тема")), if (night) "night" else "day", { night = it == "night"; dirty = false })
+            KeyboardPreview(spec, part) { tapped -> part = tapped; tab = "color" }
+            Text(tr("Нажмите на любой элемент клавиатуры, чтобы изменить его. Изменения применяются сразу."),
                 style = MaterialTheme.typography.bodySmall, color = palette.textMuted)
-            KeyboardPreview(spec, part) { part = it; tab = "color" }
-            if (saved) Banner(tr("Тема применена к клавиатуре"), Tone.SUCCESS)
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(Part.entries.toList()) { p ->
                     val active = p == part
@@ -105,19 +116,36 @@ fun KeyboardThemeEditor(nav: Navigator) {
         }
         Surface(color = palette.surface, shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp), shadowElevation = 8.dp) {
             Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SegmentedControl(listOf("color" to tr("Цвет"), "style" to tr("Стиль клавиш")), tab, { tab = it })
-                if (tab == "color") {
-                    Text(part.label(), style = MaterialTheme.typography.titleSmall, color = palette.text)
-                    ColorPicker(spec.get(part), { spec = spec.set(part, it); saved = false })
-                } else {
-                    KeyStylePicker(spec) { spec = it; saved = false }
+                SegmentedControl(listOf("color" to tr("Цвет"), "style" to tr("Стиль клавиш"), "size" to tr("Размеры")), tab, { tab = it })
+                when (tab) {
+                    "color" -> {
+                        val group = groupOf(part)
+                        if (group.size > 1) SegmentedControl(group.map { it.name to it.label() }, part.name, { part = Part.valueOf(it) })
+                        else Text(part.label(), style = MaterialTheme.typography.titleSmall, color = palette.text)
+                        ColorPicker(spec.get(part), { update(spec.set(part, it)) })
+                    }
+                    "style" -> KeyStylePicker(spec) { update(it) }
+                    else -> SizePicker(spec) { update(it) }
                 }
             }
         }
     }
     if (confirmReset) ConfirmDialog(tr("Сбросить тему?"), tr("Цвета и стиль вернутся к стандартным."), tr("Сбросить"),
-        onConfirm = { spec = if (night) KeyboardThemeSpec.NIGHT else KeyboardThemeSpec.DAY; confirmReset = false; saved = false },
+        onConfirm = { update(if (night) KeyboardThemeSpec.NIGHT else KeyboardThemeSpec.DAY); confirmReset = false },
         onDismiss = { confirmReset = false })
+}
+
+@Composable
+private fun SizePicker(spec: KeyboardThemeSpec, onChange: (KeyboardThemeSpec) -> Unit) {
+    val sliderColors = SliderDefaults.colors(thumbColor = palette.accent, activeTrackColor = palette.accent)
+    Text(tr("Значки панели инструментов: {0} sp", spec.toolbarIconSize), style = MaterialTheme.typography.labelMedium, color = palette.textMuted)
+    Slider(spec.toolbarIconSize.toFloat(), { onChange(spec.copy(toolbarIconSize = it.toInt())) }, valueRange = 18f..32f, colors = sliderColors)
+    Text(tr("Главные клавиши (Shift, ⌫, Enter): {0}%", spec.functionKeyScale), style = MaterialTheme.typography.labelMedium, color = palette.textMuted)
+    Slider(spec.functionKeyScale.toFloat(), { onChange(spec.copy(functionKeyScale = it.toInt())) }, valueRange = 90f..140f, colors = sliderColors)
+    Text(tr("Размер букв: {0}%", spec.fontScale), style = MaterialTheme.typography.labelMedium, color = palette.textMuted)
+    Slider(spec.fontScale.toFloat(), { onChange(spec.copy(fontScale = it.toInt())) }, valueRange = 70f..130f, colors = sliderColors)
+    SegmentedControl(listOf("normal" to tr("Обычный"), "medium" to tr("Средний"), "bold" to tr("Жирный")), spec.fontWeight, { onChange(spec.copy(fontWeight = it)) })
+    SwitchRow(tr("Символы на клавишах"), tr("Маленькие подсказки для удержания"), spec.showHints, Icons.Rounded.Tag) { onChange(spec.copy(showHints = it)) }
 }
 
 @Composable
@@ -141,9 +169,6 @@ private fun KeyStylePicker(spec: KeyboardThemeSpec, onChange: (KeyboardThemeSpec
         Slider(spec.cornerRadius.toFloat(), { onChange(spec.copy(cornerRadius = it.toInt())) }, valueRange = 0f..20f,
             colors = SliderDefaults.colors(thumbColor = palette.accent, activeTrackColor = palette.accent))
     }
-    Text(tr("Размер букв: {0}%", spec.fontScale), style = MaterialTheme.typography.labelMedium, color = palette.textMuted)
-    Slider(spec.fontScale.toFloat(), { onChange(spec.copy(fontScale = it.toInt())) }, valueRange = 70f..130f,
-        colors = SliderDefaults.colors(thumbColor = palette.accent, activeTrackColor = palette.accent))
 }
 
 private fun keyShape(spec: KeyboardThemeSpec, style: KeyStyle): Shape = when (style) {
@@ -180,8 +205,9 @@ private fun PreviewKey(
         contentAlignment = Alignment.Center,
     ) {
         if (icon != null) Icon(icon, null, tint = fg, modifier = Modifier.size(18.dp))
-        else Text(label, color = fg, fontSize = (16 * spec.fontScale / 100).sp, maxLines = 1)
-        if (hint != null) Text(hint, color = col(spec.hintText), fontSize = 8.sp, modifier = Modifier.align(Alignment.TopEnd).padding(end = 3.dp, top = 1.dp))
+        else Text(label, color = fg, fontSize = (16 * spec.fontScale / 100).sp, maxLines = 1,
+            fontWeight = when (spec.fontWeight) { "bold" -> androidx.compose.ui.text.font.FontWeight.Bold; "medium" -> androidx.compose.ui.text.font.FontWeight.Medium; else -> androidx.compose.ui.text.font.FontWeight.Normal })
+        if (hint != null && spec.showHints) Text(hint, color = col(spec.hintText), fontSize = 8.sp, modifier = Modifier.align(Alignment.TopEnd).padding(end = 3.dp, top = 1.dp))
     }
 }
 
@@ -198,10 +224,10 @@ private fun KeyboardPreview(spec: KeyboardThemeSpec, selected: Part, onSelect: (
     ) {
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(col(spec.toolbarBackground))
             .border(1.5.dp, if (selected == Part.TOOLBAR || selected == Part.TOOLBAR_ICONS) glow else Color.Transparent, RoundedCornerShape(10.dp))
-            .clickable { onSelect(Part.TOOLBAR) }.padding(horizontal = 10.dp, vertical = 6.dp),
+            .clickable { onSelect(if (selected in groupOf(Part.TOOLBAR)) selected else Part.TOOLBAR) }.padding(horizontal = 10.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             listOf(Icons.Rounded.Key, Icons.Rounded.EmojiEmotions, Icons.Rounded.ContentPaste, Icons.Rounded.Translate, Icons.Rounded.Mic, Icons.Rounded.MoreHoriz).forEach {
-                Icon(it, null, tint = col(spec.toolbarIcons), modifier = Modifier.size(20.dp).clickable { onSelect(Part.TOOLBAR_ICONS) })
+                Icon(it, null, tint = col(spec.toolbarIcons), modifier = Modifier.size((spec.toolbarIconSize - 4).dp).clickable { onSelect(Part.TOOLBAR_ICONS) })
             }
         }
         val rows = listOf(
@@ -212,7 +238,7 @@ private fun KeyboardPreview(spec: KeyboardThemeSpec, selected: Part, onSelect: (
         rows.forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                 row.forEach { (l, h) ->
-                    PreviewKey(l, spec, hint = h, modifier = Modifier.weight(1f), onClick = { onSelect(if (h != null && selected == Part.KEY_TEXT) Part.HINTS else if (selected == Part.KEYS) Part.KEY_TEXT else Part.KEYS) })
+                    PreviewKey(l, spec, hint = h, modifier = Modifier.weight(1f), onClick = { onSelect(if (selected in groupOf(Part.KEYS)) selected else Part.KEYS) })
                 }
             }
         }
@@ -223,7 +249,7 @@ private fun KeyboardPreview(spec: KeyboardThemeSpec, selected: Part, onSelect: (
         }
         Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             PreviewKey("!#1", spec, function = true, modifier = Modifier.weight(1.4f), onClick = { onSelect(Part.FUNCTION_KEYS) })
-            PreviewKey("", spec, function = true, icon = Icons.Rounded.Language, modifier = Modifier.weight(1f), onClick = { onSelect(Part.FUNCTION_TEXT) })
+            PreviewKey("", spec, function = true, icon = Icons.Rounded.Mic, modifier = Modifier.weight(1f), onClick = { onSelect(Part.FUNCTION_TEXT) })
             PreviewKey(",", spec, modifier = Modifier.weight(1f), onClick = { onSelect(Part.KEYS) })
             PreviewKey("Русский", spec, modifier = Modifier.weight(4f), onClick = { onSelect(Part.BORDER) })
             PreviewKey(".", spec, modifier = Modifier.weight(1f), onClick = { onSelect(Part.KEYS) })

@@ -59,7 +59,13 @@ object SBoardKeyboardSettings {
     /** Makes sure the sBoard Pass action is present on existing installations' Smart Bar. */
     suspend fun ensureVaultAction() {
         val vault = QuickAction.InsertKey(TextKeyData.IME_UI_MODE_VAULT)
-        val arrangement = prefs.smartbar.actionArrangement.get()
+        val editing = QuickAction.InsertKey(TextKeyData.IME_UI_MODE_EDITING)
+        var arrangement = prefs.smartbar.actionArrangement.get()
+        if (editing !in arrangement) {
+            // Older installs: add the text editing panel to the toolbar.
+            arrangement = arrangement.copy(dynamicActions = listOf(editing) + arrangement.dynamicActions).distinct()
+            prefs.smartbar.actionArrangement.set(arrangement)
+        }
         if (vault in arrangement) return
         val newDynamic = listOfNotNull(arrangement.stickyAction) + arrangement.dynamicActions
         prefs.smartbar.actionArrangement.set(arrangement.copy(stickyAction = vault, dynamicActions = newDynamic).distinct())
@@ -90,6 +96,78 @@ object SBoardKeyboardSettings {
     suspend fun setEmojiSuggestions(value: Boolean) = prefs.emoji.suggestionEnabled.set(value)
     fun clipboardHistory(): Boolean = prefs.clipboard.historyEnabled.get()
     suspend fun setClipboardHistory(value: Boolean) = prefs.clipboard.historyEnabled.set(value)
+
+    fun vibrationStrength(): Int = prefs.inputFeedback.hapticVibrationStrength.get()
+    suspend fun setVibrationStrength(value: Int) = prefs.inputFeedback.hapticVibrationStrength.set(value.coerceIn(1, 100))
+    fun vibrationDuration(): Int = prefs.inputFeedback.hapticVibrationDuration.get()
+    suspend fun setVibrationDuration(value: Int) = prefs.inputFeedback.hapticVibrationDuration.set(value.coerceIn(5, 120))
+
+    /** "cursor" (Samsung default: drag the space bar to move the cursor) or "language". */
+    fun spaceSwipe(): String = if (prefs.gestures.spaceBarSwipeLeft.get() == dev.patrickgold.florisboard.ime.text.gestures.SwipeAction.SWITCH_TO_PREV_SUBTYPE) "language" else "cursor"
+    suspend fun setSpaceSwipe(value: String) {
+        val language = value == "language"
+        prefs.gestures.spaceBarSwipeLeft.set(if (language) dev.patrickgold.florisboard.ime.text.gestures.SwipeAction.SWITCH_TO_PREV_SUBTYPE else dev.patrickgold.florisboard.ime.text.gestures.SwipeAction.MOVE_CURSOR_LEFT)
+        prefs.gestures.spaceBarSwipeRight.set(if (language) dev.patrickgold.florisboard.ime.text.gestures.SwipeAction.SWITCH_TO_NEXT_SUBTYPE else dev.patrickgold.florisboard.ime.text.gestures.SwipeAction.MOVE_CURSOR_RIGHT)
+    }
+    /** Long-press on space: "languages" (list of keyboard languages) or "keyboards" (system picker). */
+    fun spaceLongPress(): String = if (prefs.gestures.spaceBarLongPress.get() == dev.patrickgold.florisboard.ime.text.gestures.SwipeAction.SHOW_SUBTYPE_PICKER) "languages" else "keyboards"
+    suspend fun setSpaceLongPress(value: String) = prefs.gestures.spaceBarLongPress.set(
+        if (value == "languages") dev.patrickgold.florisboard.ime.text.gestures.SwipeAction.SHOW_SUBTYPE_PICKER else dev.patrickgold.florisboard.ime.text.gestures.SwipeAction.SHOW_INPUT_METHOD_PICKER)
+    /** Swipe left on Delete selects and deletes whole words. */
+    fun deleteSwipeWords(): Boolean = prefs.gestures.deleteKeySwipeLeft.get() == dev.patrickgold.florisboard.ime.text.gestures.SwipeAction.DELETE_WORDS_PRECISELY
+    suspend fun setDeleteSwipeWords(value: Boolean) = prefs.gestures.deleteKeySwipeLeft.set(
+        if (value) dev.patrickgold.florisboard.ime.text.gestures.SwipeAction.DELETE_WORDS_PRECISELY else dev.patrickgold.florisboard.ime.text.gestures.SwipeAction.DELETE_CHARACTERS_PRECISELY)
+    fun capsLockMemory(): Boolean = prefs.correction.rememberCapsLockState.get()
+    suspend fun setCapsLockMemory(value: Boolean) = prefs.correction.rememberCapsLockState.set(value)
+
+    // ---- Clipboard ------------------------------------------------------------------------------
+
+    fun clipboardKeepMinutes(): Int = if (prefs.clipboard.historyAutoCleanOldEnabled.get()) prefs.clipboard.historyAutoCleanOldAfter.get() else 0
+    /** 0 = keep until deleted. */
+    suspend fun setClipboardKeepMinutes(value: Int) {
+        prefs.clipboard.historyAutoCleanOldEnabled.set(value > 0)
+        if (value > 0) prefs.clipboard.historyAutoCleanOldAfter.set(value)
+    }
+    fun clipboardLimit(): Int = if (prefs.clipboard.historySizeLimitEnabled.get()) prefs.clipboard.historySizeLimit.get() else 0
+    suspend fun setClipboardLimit(value: Int) {
+        prefs.clipboard.historySizeLimitEnabled.set(value > 0)
+        if (value > 0) prefs.clipboard.historySizeLimit.set(value)
+    }
+
+    // ---- Modes ----------------------------------------------------------------------------------
+
+    /** Width of the keyboard in one-handed mode (percent of the screen). */
+    fun oneHandedWidth(): Int = prefs.keyboard.oneHandedModeScaleFactor.get()
+    suspend fun setOneHandedWidth(value: Int) = prefs.keyboard.oneHandedModeScaleFactor.set(value.coerceIn(70, 90))
+    fun oneHandedRight(): Boolean = prefs.keyboard.oneHandedMode.get() == dev.patrickgold.florisboard.ime.onehanded.OneHandedMode.END
+    suspend fun setOneHandedRight(value: Boolean) = prefs.keyboard.oneHandedMode.set(
+        if (value) dev.patrickgold.florisboard.ime.onehanded.OneHandedMode.END else dev.patrickgold.florisboard.ime.onehanded.OneHandedMode.START)
+
+    // ---- Personal dictionary --------------------------------------------------------------------
+
+    data class DictionaryWord(val id: Long, val word: String, val shortcut: String?, val locale: String?)
+
+    private fun dictionaryDao() = dev.patrickgold.florisboard.ime.dictionary.DictionaryManager.default().let {
+        it.loadUserDictionariesIfNecessary(); it.florisUserDictionaryDao()
+    }
+
+    suspend fun dictionaryWords(): List<DictionaryWord> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        dictionaryDao()?.queryAll().orEmpty().map { DictionaryWord(it.id, it.word, it.shortcut, it.locale) }.sortedBy { it.word.lowercase() }
+    }
+
+    suspend fun addDictionaryWord(word: String, shortcut: String?, locale: String?) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val clean = word.trim()
+        require(clean.isNotEmpty())
+        dictionaryDao()?.insert(dev.patrickgold.florisboard.ime.dictionary.UserDictionaryEntry(0, clean, 200, locale?.takeIf { it.isNotBlank() }, shortcut?.trim()?.takeIf { it.isNotEmpty() }))
+    }
+
+    suspend fun deleteDictionaryWord(id: Long) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val dao = dictionaryDao() ?: return@withContext
+        dao.queryAll().firstOrNull { it.id == id }?.let { dao.delete(it) }
+    }
+
+    /** Keyboard language tags for the dictionary language selector. */
+    fun enabledLanguageTags(context: Context): List<String> = context.subtypeManager().value.subtypes.map { it.primaryLocale.languageTag() }.distinct()
 
     // ---- Size & look --------------------------------------------------------------------------
 

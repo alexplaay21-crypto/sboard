@@ -93,7 +93,7 @@ class SyncEngine(context: Context, private val drive: DriveClient = DriveClient(
                 val records = dao.getAll().map(SyncMerger::toRecord)
                 val devices = listOf(SyncDevice(selfId, selfName, now))
                 val content = session.withKey { key -> BackupFormat.encode(header(vaultId, 1, now, selfId), BackupBody(records, devices), key) }
-                drive.create(token, content, 1)
+                drive.create(token, content, 1, recoveryProperty())
                 records.forEach { dao.markSynced(it.id, SyncMerger.recordHash(it)) }
                 SyncStatus.update(app) { it.copy(remoteItems = records.count { r -> !r.deleted }, remoteGeneration = 1, devices = devices) }
                 return Outcome.Success(0, records.size, 0)
@@ -126,6 +126,11 @@ class SyncEngine(context: Context, private val drive: DriveClient = DriveClient(
                 parsed.header.keyUpdatedAt < localKeyUpdated -> keyMaterialNewerLocally = true
             }
 
+            // Learn the Google-recovery secret from the file so this device keeps it on later uploads.
+            if (keys.hasGoogleRecovery() && keys.googleRecoverySecret() == null) {
+                main.properties[VaultKeyManager.DRIVE_RECOVERY_PROPERTY]?.takeIf { it.isNotBlank() }?.let { keys.storeGoogleSecret(it) }
+            }
+
             val merge = applyMerge(body.items)
             var devices = SyncMerger.mergeDevices(body.devices, selfId, selfName, now)
             if (revokeDeviceId != null && revokeDeviceId != selfId) devices = devices.map { if (it.id == revokeDeviceId) it.copy(revoked = true) else it }
@@ -140,7 +145,7 @@ class SyncEngine(context: Context, private val drive: DriveClient = DriveClient(
                 }
                 // Optimistic concurrency: if another device wrote since our download, merge again.
                 if (drive.metadata(token, main.id).version != main.version) return@repeat
-                drive.update(token, main.id, content, generation)
+                drive.update(token, main.id, content, generation, recoveryProperty())
                 files.drop(1).forEach { runCatching { drive.delete(token, it.id) } }
             }
             merge.upload.forEach { dao.markSynced(it.id, SyncMerger.recordHash(it)) }
@@ -170,6 +175,13 @@ class SyncEngine(context: Context, private val drive: DriveClient = DriveClient(
         result
     }
 
+    /** Google-recovery secret as a private app property of the backup file (null removes it). */
+    private suspend fun recoveryProperty(): Map<String, String?> = when {
+        !keys.hasGoogleRecovery() -> mapOf(VaultKeyManager.DRIVE_RECOVERY_PROPERTY to null)
+        // A device that never saw the secret leaves the property untouched.
+        else -> keys.googleRecoverySecret()?.let { mapOf(VaultKeyManager.DRIVE_RECOVERY_PROPERTY to it) } ?: emptyMap()
+    }
+
     private suspend fun header(vaultId: String, generation: Long, now: Long, selfId: String, keyUpdatedAt: Long? = null) = BackupHeader(
         vaultId = vaultId, generation = generation, writtenAt = now, writerDeviceId = selfId,
         keyUpdatedAt = keyUpdatedAt ?: keys.keyUpdatedAt(), keyWraps = keys.exportWraps(),
@@ -177,9 +189,34 @@ class SyncEngine(context: Context, private val drive: DriveClient = DriveClient(
 
     // ---- Restore / join / replace ------------------------------------------------------------
 
+    /** Whether the cloud Vault can be opened by signing in to Google (recovery enabled earlier). */
+    fun canRecoverWithGoogle(cloud: CloudVault): Boolean =
+        cloud.parsed.header.keyWraps.any { it.kind == com.sboard.app.feature.vault.KeyWrap.GOOGLE } &&
+            !cloud.file.properties[VaultKeyManager.DRIVE_RECOVERY_PROPERTY].isNullOrBlank()
+
+    /**
+     * Forgotten master password and lost Recovery Key: opens the cloud Vault with the recovery secret
+     * stored in the user's Google Drive. The caller must then set a new master password.
+     */
+    suspend fun restoreWithGoogle(cloud: CloudVault): Int {
+        val secret = cloud.file.properties[VaultKeyManager.DRIVE_RECOVERY_PROPERTY]
+            ?: throw com.sboard.app.feature.vault.WrongSecretException(tr("Восстановление через Google не было включено"))
+        val key = keys.unwrapGoogleKey(cloud.parsed.header.keyWraps, secret)
+        val localVaultId = keys.vaultId()
+        if (localVaultId == cloud.parsed.header.vaultId) {
+            // Same Vault on this device: just unlock it, local unsynced changes stay.
+            BackupFormat.decryptBody(cloud.parsed, key.copyOf()) // proves the key
+            keys.unlockWithRawKey(key)
+            keys.storeGoogleSecret(secret)
+            return 0
+        }
+        return restoreWithKey(cloud, key).also { keys.storeGoogleSecret(secret) }
+    }
+
     /** New device: restores the cloud Vault using the master password (or Recovery Key) typed by the user. */
-    suspend fun restore(cloud: CloudVault, secret: String): Int = lock.withLock {
-        val key = keys.unwrapCloudKey(cloud.parsed.header.keyWraps, secret)
+    suspend fun restore(cloud: CloudVault, secret: String): Int = restoreWithKey(cloud, keys.unwrapCloudKey(cloud.parsed.header.keyWraps, secret))
+
+    private suspend fun restoreWithKey(cloud: CloudVault, key: ByteArray): Int = lock.withLock {
         try {
             val body = BackupFormat.decryptBody(cloud.parsed, key)
             db.withTransaction {
@@ -239,7 +276,8 @@ class SyncEngine(context: Context, private val drive: DriveClient = DriveClient(
         val devices = listOf(SyncDevice(selfId, DeviceIdentity.displayName(), now))
         val generation = (files.firstOrNull()?.let { runCatching { BackupFormat.parse(drive.download(token, it)).header.generation }.getOrNull() } ?: 0L) + 1
         val content = session.withKey { key -> BackupFormat.encode(header(vaultId, generation, now, selfId), BackupBody(records, devices), key) }
-        if (files.isEmpty()) drive.create(token, content, generation) else drive.update(token, files.first().id, content, generation)
+        if (files.isEmpty()) drive.create(token, content, generation, recoveryProperty())
+        else drive.update(token, files.first().id, content, generation, recoveryProperty())
         files.drop(1).forEach { runCatching { drive.delete(token, it.id) } }
         records.forEach { dao.markSynced(it.id, SyncMerger.recordHash(it)) }
         SyncStatus.update(app) { it.copy(state = SyncState.SUCCESS, lastSuccessAt = now, lastAttemptAt = now, message = null,

@@ -158,13 +158,14 @@ class TextKey(override val data: AbstractKeyData) : Key(data) {
                     KeyCode.VIEW_SYMBOLS, 61 -> 1.26f
                     else -> 1.56f
                 }
+                // sBoard: main keys a little wider than letters (Samsung proportions).
                 else -> when (computed.code) {
                     KeyCode.SHIFT,
-                    KeyCode.DELETE -> 1.56f
+                    KeyCode.DELETE -> 1.62f
                     KeyCode.VIEW_CHARACTERS,
                     KeyCode.VIEW_SYMBOLS,
                     KeyCode.VIEW_SYMBOLS2,
-                    KeyCode.ENTER -> 1.56f
+                    KeyCode.ENTER -> 1.66f
                     else -> 1.00f
                 }
             }

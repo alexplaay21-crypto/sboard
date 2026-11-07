@@ -131,12 +131,13 @@ fun ProvideKeyboardRowBaseHeight(content: @Composable () -> Unit) {
         configuration, resources, heightFactorPortrait, heightFactorLandscape,
         oneHandedMode, oneHandedModeScaleFactor, systemBarHeights,
     ) {
-        calcInputViewHeight(resources, systemBarHeights) * when {
+        // sBoard: keys are ~3% shorter so the toolbar can be taller at the same total height.
+        0.97f * calcInputViewHeight(resources, systemBarHeights) * when {
             configuration.isOrientationLandscape() -> heightFactorLandscape
             else -> heightFactorPortrait * (if (oneHandedMode) oneHandedModeScaleFactor else 1f)
         }
     }
-    val smartbarHeight = baseRowHeight * 0.753f
+    val smartbarHeight = baseRowHeight * 0.90f
 
     SideEffect {
         FlorisImeSizing.Static.keyboardRowBaseHeightPx = baseRowHeight.toInt()

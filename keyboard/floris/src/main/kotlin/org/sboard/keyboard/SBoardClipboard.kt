@@ -28,4 +28,13 @@ object SBoardClipboard {
     }
     fun clearUnpinned(context: Context) = context.clipboardManager().value.clearHistory()
     fun add(context: Context, text: String) = context.clipboardManager().value.addNewPlaintext(text)
+
+    @Volatile var excludeCodes: Boolean = true
+
+    /** One-time codes (4–8 digits) are kept out of the history when [excludeCodes] is on. */
+    fun looksLikeSecret(text: String?): Boolean {
+        if (!excludeCodes || text == null) return false
+        val t = text.trim()
+        return t.length in 4..9 && t.replace(" ", "").replace("-", "").let { it.length in 4..8 && it.all(Char::isDigit) }
+    }
 }

@@ -52,10 +52,22 @@ class MainActivity : SecureActivity() {
     /** The keyboard's settings key opens sBoard directly on the Keyboard tab. */
     private fun handleIntent(intent: android.content.Intent?) {
         if (intent?.getStringExtra("sboard.open_tab") == "keyboard") pendingTab.value = Tab.KEYBOARD
+        // The keyboard's microphone key asks for the permission through the app (IMEs cannot).
+        if (intent?.getBooleanExtra("sboard.request_mic", false) == true &&
+            checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), REQUEST_MIC)
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        // Back to the app that was being typed in; the next tap on the microphone starts dictation.
+        if (requestCode == REQUEST_MIC && grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) moveTaskToBack(true)
     }
 
     companion object {
         val pendingTab = mutableStateOf<Tab?>(null)
+        private const val REQUEST_MIC = 41
     }
 
     override fun onStart() {
@@ -72,6 +84,12 @@ private fun AppRoot() {
     // null = loading, true = first run (no Vault on this device yet), false = Vault exists.
     var onboarding by remember { mutableStateOf<Boolean?>(null) }
     var startupError by remember { mutableStateOf<String?>(null) }
+    // Interface in the system language: download its language pack once if it is not built in.
+    LaunchedEffect(com.sboard.app.core.i18n.SBoardI18n.currentMode()) {
+        com.sboard.app.core.i18n.SBoardI18n.missingPack()?.let { lang ->
+            if (lang in com.sboard.app.feature.tools.Translator.CODES) runCatching { com.sboard.app.core.i18n.LanguagePacks.download(context, lang) }
+        }
+    }
     LaunchedEffect(Unit) {
         runCatching { VaultKeyManager(context).hasVault() }
             .onSuccess { onboarding = !it }
@@ -142,6 +160,8 @@ private fun MainShell(nav: Navigator) {
                 Route.About -> AboutScreen(nav)
                 Route.PasswordHealth -> PasswordHealthScreen(nav)
                 Route.KeyboardTheme -> KeyboardThemeEditor(nav)
+                is Route.KeyboardSection -> KeyboardSectionScreen(nav, state.id)
+                Route.AppLanguage -> AppLanguageScreen(nav)
             }
         }
         AnimatedVisibility(

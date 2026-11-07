@@ -151,6 +151,7 @@ class StatisticalGlideTypingClassifier(context: Context) : GlideTypingClassifier
         }
 
         this.words = nlpManager.getListOfWords(subtype)
+        wordPriors.clear()
 
         this.wordDataSubtype = subtype
         if (wordDataSubtype == layoutSubtype) {
@@ -184,6 +185,8 @@ class StatisticalGlideTypingClassifier(context: Context) : GlideTypingClassifier
     }
 
     private val lruSuggestionCache = LruCache<Pair<Gesture, Int>, List<String>>(SUGGESTION_CACHE_SIZE)
+    /** Word priors per subtype; cleared when the word list changes. */
+    private val wordPriors = HashMap<String, Float>()
     override fun getSuggestions(maxSuggestionCount: Int, gestureCompleted: Boolean): List<String> {
         return when (val cached = lruSuggestionCache.get(Pair(this.gesture, maxSuggestionCount))) {
             null -> {
@@ -219,7 +222,8 @@ class StatisticalGlideTypingClassifier(context: Context) : GlideTypingClassifier
                 val locationDistance = calcLocationDistance(wordGesture, userGesture)
                 val shapeProbability = calcGaussianProbability(shapeDistance, 0.0f, SHAPE_STD)
                 val locationProbability = calcGaussianProbability(locationDistance, 0.0f, LOCATION_STD * radius)
-                val frequency = 255f * nlpManager.getFrequencyForWord(currentSubtype!!, word).toFloat()
+                // sBoard: calibrated word prior (see LatinLanguageProvider.getFrequencyForWord).
+                val frequency = (wordPriors.getOrPut(word) { nlpManager.getFrequencyForWord(currentSubtype!!, word).toFloat() } * 1000f).coerceAtLeast(1e-3f)
                 val confidence = 1.0f / (shapeProbability * locationProbability * frequency)
 
                 var candidateDistanceSortedIndex = 0
@@ -318,8 +322,8 @@ class StatisticalGlideTypingClassifier(context: Context) : GlideTypingClassifier
             val startY = userGesture.getFirstY()
             val endX = userGesture.getLastX()
             val endY = userGesture.getLastY()
-            val startKeys = findNClosestKeys(startX, startY, 2, keys)
-            val endKeys = findNClosestKeys(endX, endY, 2, keys)
+            val startKeys = findNClosestKeys(startX, startY, 3, keys) // sBoard: 3 (narrow ЙЦУКЕН keys)
+            val endKeys = findNClosestKeys(endX, endY, 3, keys)
             for (startKey in startKeys) {
                 for (endKey in endKeys) {
                     val keyPair = Pair(startKey, endKey)

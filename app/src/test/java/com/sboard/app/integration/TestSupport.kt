@@ -35,7 +35,7 @@ fun simulateNewDevice(context: Context) {
 
 /** In-memory Google Drive v3 (appDataFolder subset) used by the sync end-to-end tests. */
 class FakeDrive : Dispatcher() {
-    class File(val id: String, var bytes: ByteArray, var version: Long, var modified: Long)
+    class File(val id: String, var bytes: ByteArray, var version: Long, var modified: Long, val properties: MutableMap<String, String> = mutableMapOf())
     val files = LinkedHashMap<String, File>()
     private var nextId = 1
     var requests = 0
@@ -54,13 +54,17 @@ class FakeDrive : Dispatcher() {
                 if (url.queryParameter("alt") == "media") MockResponse().setBody(Buffer().write(file.bytes)) else json(meta(file))
             }
             request.method == "POST" && path == "/upload/drive/v3/files" -> {
-                val file = File("f${nextId++}", media(request), 1, System.nanoTime())
+                val (metadata, bytes) = multipart(request)
+                val file = File("f${nextId++}", bytes, 1, System.nanoTime())
+                applyProperties(file, metadata)
                 files[file.id] = file
                 json(meta(file))
             }
             request.method == "PATCH" && path.startsWith("/upload/drive/v3/files/") -> {
                 val file = files[path.substringAfterLast('/')] ?: return MockResponse().setResponseCode(404)
-                file.bytes = media(request); file.version++; file.modified = System.nanoTime()
+                val (metadata, bytes) = multipart(request)
+                file.bytes = bytes; file.version++; file.modified = System.nanoTime()
+                applyProperties(file, metadata)
                 json(meta(file))
             }
             request.method == "DELETE" && path.startsWith("/drive/v3/files/") -> {
@@ -73,16 +77,24 @@ class FakeDrive : Dispatcher() {
     private fun meta(f: File) = JSONObject().put("id", f.id).put("version", f.version.toString())
         .put("modifiedTime", f.modified.toString()).put("size", f.bytes.size.toString())
         .put("md5Checksum", MessageDigest.getInstance("MD5").digest(f.bytes).joinToString("") { "%02x".format(it) })
+        .put("appProperties", JSONObject(f.properties as Map<*, *>))
+
+    /** Drive semantics: listed properties are merged in, null values remove a property. */
+    private fun applyProperties(file: File, metadata: JSONObject) {
+        val props = metadata.optJSONObject("appProperties") ?: return
+        props.keys().forEach { key -> if (props.isNull(key)) file.properties.remove(key) else file.properties[key] = props.getString(key) }
+    }
 
     private fun json(o: JSONObject) = MockResponse().setHeader("Content-Type", "application/json").setBody(o.toString())
 
-    /** Extracts the media part of a multipart/related upload. */
-    private fun media(request: RecordedRequest): ByteArray {
+    /** Splits a multipart/related upload into its JSON metadata and media parts. */
+    private fun multipart(request: RecordedRequest): Pair<JSONObject, ByteArray> {
         val boundary = request.getHeader("Content-Type")!!.substringAfter("boundary=").trim('"')
         val body = request.body.readByteArray().toString(Charsets.ISO_8859_1)
         val parts = body.split("--$boundary").map { it.trim('\r', '\n') }.filter { it.isNotEmpty() && it != "--" }
+        val metadata = JSONObject(String(parts[0].substringAfter("\r\n\r\n").toByteArray(Charsets.ISO_8859_1), Charsets.UTF_8))
         val mediaPart = parts[1]
         val content = mediaPart.substringAfter("\r\n\r\n").removeSuffix("\r\n")
-        return content.toByteArray(Charsets.ISO_8859_1)
+        return metadata to content.toByteArray(Charsets.ISO_8859_1)
     }
 }

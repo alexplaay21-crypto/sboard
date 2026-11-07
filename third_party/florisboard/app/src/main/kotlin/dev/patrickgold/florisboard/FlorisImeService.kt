@@ -367,7 +367,10 @@ class FlorisImeService : LifecycleInputMethodService() {
             activeState.isSelectionMode = editorInfo.initialSelection.isSelectionMode
             editorInstance.handleStartInputView(editorInfo, isRestart = restarting)
         }
-        if (!restarting) org.sboard.keyboard.SBoardVaultBridge.translateBarVisible.value = false
+        if (!restarting) {
+            org.sboard.keyboard.SBoardVaultBridge.translateBarVisible.value = false
+            org.sboard.keyboard.SBoardVoice.stop()
+        }
         // Modified for sBoard: commit a Vault value the user approved in the confirmation activity.
         org.sboard.keyboard.SBoardVaultBridge.consumePending(editorInfo.packageName)?.let { text ->
             android.os.Handler(mainLooper).postDelayed({ editorInstance.commitText(text) }, 120)
@@ -404,6 +407,7 @@ class FlorisImeService : LifecycleInputMethodService() {
     override fun onFinishInputView(finishingInput: Boolean) {
         flogInfo { "finishing=$finishingInput" }
         super.onFinishInputView(finishingInput)
+        org.sboard.keyboard.SBoardVoice.stop()
         editorInstance.handleFinishInputView()
     }
 
@@ -682,18 +686,27 @@ class FlorisImeService : LifecycleInputMethodService() {
                                 .wrapContentHeight(),
                         ) {
                             // Modified for sBoard: live translation bar above the keys.
+                            // Voice dictation bar likewise; panels cross-fade for smoother switching.
                             val translateBar by org.sboard.keyboard.SBoardVaultBridge.translateBarVisible.collectAsState()
-                            if (translateBar && state.imeUiMode == ImeUiMode.TEXT) {
-                                androidx.compose.foundation.layout.Column {
-                                    org.sboard.keyboard.TranslateBar()
-                                    TextInputLayout()
+                            val voiceState by org.sboard.keyboard.SBoardVoice.state.collectAsState()
+                            androidx.compose.animation.Crossfade(
+                                targetState = state.imeUiMode,
+                                animationSpec = androidx.compose.animation.core.tween(140),
+                                label = "imeUiMode",
+                            ) { mode ->
+                                if (mode == ImeUiMode.TEXT && (voiceState.active || translateBar)) {
+                                    androidx.compose.foundation.layout.Column {
+                                        if (voiceState.active) org.sboard.keyboard.VoiceBar() else org.sboard.keyboard.TranslateBar()
+                                        TextInputLayout()
+                                    }
+                                } else when (mode) {
+                                    ImeUiMode.TEXT -> TextInputLayout()
+                                    ImeUiMode.MEDIA -> MediaInputLayout()
+                                    ImeUiMode.CLIPBOARD -> ClipboardInputLayout()
+                                    ImeUiMode.VAULT -> org.sboard.keyboard.VaultInputLayout()
+                                    ImeUiMode.TRANSLATE -> org.sboard.keyboard.TranslateInputLayout()
+                                    ImeUiMode.EDITING -> org.sboard.keyboard.TextEditingLayout()
                                 }
-                            } else when (state.imeUiMode) {
-                                ImeUiMode.TEXT -> TextInputLayout()
-                                ImeUiMode.MEDIA -> MediaInputLayout()
-                                ImeUiMode.CLIPBOARD -> ClipboardInputLayout()
-                                ImeUiMode.VAULT -> org.sboard.keyboard.VaultInputLayout()
-                                ImeUiMode.TRANSLATE -> org.sboard.keyboard.TranslateInputLayout()
                             }
                         }
                     }

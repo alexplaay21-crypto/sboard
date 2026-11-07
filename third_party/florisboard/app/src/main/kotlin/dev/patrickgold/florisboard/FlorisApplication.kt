@@ -124,6 +124,7 @@ open class FlorisApplication : Application() {
         extensionManager.value.init()
         clipboardManager.value.initializeForContext(this)
         DictionaryManager.init(this)
+        org.sboard.keyboard.SBoardTypingPrefs.load(this)
         seedDefaultRussianAndEnglishLayouts()
     }
 
@@ -154,17 +155,24 @@ open class FlorisApplication : Application() {
             } finally {
                 withContext(Dispatchers.Main.immediate) { presetsFlow.removeObserver(observer) }
             }
+            // Modified for sBoard: the system language first, English as the second language
+            // (English only when the phone itself is in English).
             val english = presets.firstOrNull { it.locale.languageTag() == "en-US" }
-            val russian = presets.firstOrNull { it.locale.language == "ru" }
-            if (english == null || russian == null) {
-                Log.e("sBoardKeyboard", "Built-in English or Russian layout preset is missing")
+                ?: presets.firstOrNull { it.locale.language == "en" }
+            if (english == null) {
+                Log.e("sBoardKeyboard", "Built-in English layout preset is missing")
                 return@launch
             }
-
+            val system = java.util.Locale.getDefault()
+            val native = if (system.language == "en") null else
+                presets.firstOrNull { it.locale.language == system.language && it.locale.country == system.country }
+                    ?: presets.firstOrNull { it.locale.language == system.language }
+            val chosen = listOfNotNull(native, english)
             val idSeed = System.currentTimeMillis()
             // Modified for sBoard: Samsung-style symbol pages (also used as long-press letter hints).
-            val subtypes = listOf(english, russian).mapIndexed { index, preset ->
+            val subtypes = chosen.mapIndexed { index, preset ->
                 val subtype = preset.toSubtype()
+                if (subtype.layoutMap.symbols.componentId !in setOf("western", "eastern")) return@mapIndexed subtype.copy(id = idSeed + index)
                 subtype.copy(id = idSeed + index, layoutMap = subtype.layoutMap.copy(
                     symbols = dev.patrickgold.florisboard.ime.keyboard.extCoreLayout("western_samsung"),
                     symbols2 = dev.patrickgold.florisboard.ime.keyboard.extCoreLayout("western_samsung"),

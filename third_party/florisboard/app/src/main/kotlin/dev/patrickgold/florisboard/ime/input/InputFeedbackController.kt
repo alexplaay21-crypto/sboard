@@ -97,19 +97,16 @@ class InputFeedbackController private constructor(private val ims: InputMethodSe
         if (prefs.inputFeedback.audioActivationMode.get() ==
             InputFeedbackActivationMode.RESPECT_SYSTEM_SETTINGS && !systemAudioEnabled) return
 
-        scope.launch {
-            val volume = (prefs.inputFeedback.audioVolume.get() * factor) / 100.0
-            val effect = when (data.code) {
-                KeyCode.DELETE -> AudioManager.FX_KEYPRESS_DELETE
-                KeyCode.ENTER -> AudioManager.FX_KEYPRESS_RETURN
-                KeyCode.SPACE -> AudioManager.FX_KEYPRESS_SPACEBAR
-                else -> AudioManager.FX_KEYPRESS_STANDARD
-            }
-            if (volume in 0.01..1.00) {
-                flogDebug { "Perform audio with volume=$volume and effect=$effect" }
-                audioManager.playSoundEffect(effect, volume.toFloat())
-            }
+        // Modified for sBoard: own synthesised click sounds (the system effect is silent on many phones).
+        val volume = ((prefs.inputFeedback.audioVolume.get() * factor) / 100.0).toFloat()
+        if (volume < 0.01f) return
+        val kind = when (data.code) {
+            KeyCode.DELETE -> org.sboard.keyboard.SBoardKeySound.Kind.DELETE
+            KeyCode.ENTER -> org.sboard.keyboard.SBoardKeySound.Kind.ENTER
+            KeyCode.SPACE -> org.sboard.keyboard.SBoardKeySound.Kind.SPACE
+            else -> org.sboard.keyboard.SBoardKeySound.Kind.STANDARD
         }
+        scope.launch { org.sboard.keyboard.SBoardKeySound.play(ims, kind, volume) }
     }
 
     private fun performHapticFeedback(data: KeyData, factor: Double) {

@@ -232,6 +232,8 @@ class ClipboardManager(
      * Adds a new item to the clipboard history (if enabled).
      */
     private fun insertOrMoveBeginning(newItem: ClipboardItem) {
+        // sBoard: passwords and one-time codes never enter the regular clipboard history.
+        if (newItem.isSensitive || org.sboard.keyboard.SBoardClipboard.looksLikeSecret(newItem.text)) return
         if (prefs.clipboard.historyEnabled.get()) {
             val historyElement = currentHistory.all.firstOrNull { it.type == ItemType.TEXT && it.text == newItem.text }
             if (historyElement != null) {
