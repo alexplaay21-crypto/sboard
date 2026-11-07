@@ -82,6 +82,20 @@ class DriveClient(
         }
     }
 
+    /**
+     * Drive keeps older revisions of an updated file for a while. sBoard needs only the newest copy,
+     * so all older revisions of the backup are removed (best effort).
+     */
+    suspend fun pruneRevisions(token: String, fileId: String) = withContext(Dispatchers.IO) {
+        val ids = execute(token, Request.Builder().url("$api/files/$fileId/revisions?fields=revisions(id)").get(), "revisions").use {
+            val list = JSONObject(it.body!!.string()).optJSONArray("revisions") ?: return@withContext
+            (0 until list.length()).map { i -> list.getJSONObject(i).getString("id") }
+        }
+        ids.dropLast(1).forEach { id ->
+            runCatching { execute(token, Request.Builder().url("$api/files/$fileId/revisions/$id").delete(), "revision delete").close() }
+        }
+    }
+
     suspend fun delete(token: String, fileId: String) = withContext(Dispatchers.IO) {
         execute(token, Request.Builder().url("$api/files/$fileId").delete(), "delete").close()
     }

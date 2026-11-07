@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- Voice input in the keyboard (requested only when the microphone key is used). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- "Save password to sPass?" offer after typing a password with the sBoard keyboard. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
@@ -107,7 +109,7 @@
             android:excludeFromRecents="true"
             android:taskAffinity="com.sboard.app.keyboardauth"
             android:windowSoftInputMode="adjustResize"
-            android:theme="@style/Theme.SBoard" />
+            android:theme="@style/Theme.SBoard.Translucent" />
 
         <!-- QR scanner (ZXing) in portrait-independent mode -->
         <activity

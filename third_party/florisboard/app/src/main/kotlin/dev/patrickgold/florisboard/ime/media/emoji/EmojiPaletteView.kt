@@ -42,6 +42,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Delete
@@ -290,6 +291,15 @@ fun EmojiPaletteView(
             pagerState.animateScrollToPage(0)
         }
 
+        androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        // sBoard: emoji search
+        org.florisboard.lib.snygg.ui.SnyggIconButton(FlorisImeUi.MediaEmojiTab.elementName,
+            modifier = Modifier.size(FlorisImeSizing.smartbarHeight),
+            onClick = { org.sboard.keyboard.SBoardEmojiSearch.open(context) }) {
+            SnyggIcon(FlorisImeUi.MediaEmojiTab.elementName, imageVector = androidx.compose.material.icons.Icons.Default.Search,
+                modifier = Modifier.size(ButtonDefaults.IconSize))
+        }
+        androidx.compose.foundation.layout.Box(Modifier.weight(1f)) {
         EmojiCategoriesTabRow(
             activeCategory = activeCategory,
             onCategoryChange = { category ->
@@ -297,6 +307,8 @@ fun EmojiPaletteView(
                 scope.launch { pagerState.animateScrollToPage(categoryToPageNumber(activeCategory)) }
             },
         )
+        }
+        }
         HorizontalPager(pagerState, beyondViewportPageCount = 1) { page ->
             // Every page needs its own lazyGridState in order to scroll correctly
             val lazyGridState = rememberLazyGridState()

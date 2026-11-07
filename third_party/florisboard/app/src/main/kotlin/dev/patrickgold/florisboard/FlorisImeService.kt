@@ -353,6 +353,7 @@ class FlorisImeService : LifecycleInputMethodService() {
         if (info == null) return
         val editorInfo = FlorisEditorInfo.wrap(info)
         editorInstance.handleStartInput(editorInfo)
+        org.sboard.keyboard.SBoardPasswordCapture.onStartInput(this, info)
     }
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
@@ -370,6 +371,7 @@ class FlorisImeService : LifecycleInputMethodService() {
         if (!restarting) {
             org.sboard.keyboard.SBoardVaultBridge.translateBarVisible.value = false
             org.sboard.keyboard.SBoardVoice.stop()
+            org.sboard.keyboard.SBoardEmojiSearch.close()
         }
         // Modified for sBoard: commit a Vault value the user approved in the confirmation activity.
         org.sboard.keyboard.SBoardVaultBridge.consumePending(editorInfo.packageName)?.let { text ->
@@ -394,6 +396,7 @@ class FlorisImeService : LifecycleInputMethodService() {
     ) {
         flogInfo { "old={start=$oldSelStart,end=$oldSelEnd} new={start=$newSelStart,end=$newSelEnd} composing={start=$candidatesStart,end=$candidatesEnd}" }
         super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
+        org.sboard.keyboard.SBoardPasswordCapture.onUpdate(currentInputConnection)
         activeState.batchEdit {
             activeState.isSelectionMode = (newSelEnd - newSelStart) != 0
             editorInstance.handleSelectionUpdate(
@@ -413,6 +416,7 @@ class FlorisImeService : LifecycleInputMethodService() {
 
     override fun onFinishInput() {
         flogInfo { "(no args)" }
+        org.sboard.keyboard.SBoardPasswordCapture.onFinish(this)
         super.onFinishInput()
         editorInstance.handleFinishInput()
         NlpInlineAutofill.clearInlineSuggestions()
@@ -689,14 +693,19 @@ class FlorisImeService : LifecycleInputMethodService() {
                             // Voice dictation bar likewise; panels cross-fade for smoother switching.
                             val translateBar by org.sboard.keyboard.SBoardVaultBridge.translateBarVisible.collectAsState()
                             val voiceState by org.sboard.keyboard.SBoardVoice.state.collectAsState()
+                            val emojiSearch by org.sboard.keyboard.SBoardEmojiSearch.active.collectAsState()
                             androidx.compose.animation.Crossfade(
                                 targetState = state.imeUiMode,
                                 animationSpec = androidx.compose.animation.core.tween(140),
                                 label = "imeUiMode",
                             ) { mode ->
-                                if (mode == ImeUiMode.TEXT && (voiceState.active || translateBar)) {
+                                if (mode == ImeUiMode.TEXT && (voiceState.active || translateBar || emojiSearch)) {
                                     androidx.compose.foundation.layout.Column {
-                                        if (voiceState.active) org.sboard.keyboard.VoiceBar() else org.sboard.keyboard.TranslateBar()
+                                        when {
+                                            emojiSearch -> org.sboard.keyboard.EmojiSearchBar()
+                                            voiceState.active -> org.sboard.keyboard.VoiceBar()
+                                            else -> org.sboard.keyboard.TranslateBar()
+                                        }
                                         TextInputLayout()
                                     }
                                 } else when (mode) {

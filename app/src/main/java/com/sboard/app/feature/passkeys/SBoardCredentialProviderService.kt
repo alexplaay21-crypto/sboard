@@ -100,7 +100,7 @@ object PasskeyProvider {
         if (!VaultSessionProvider.session.isUnlocked) {
             val intent = Intent(context, PasskeyActivity::class.java).putExtra(PasskeyActivity.EXTRA_MODE, PasskeyActivity.MODE_UNLOCK)
             val pending = PendingIntent.getActivity(context, 4200, intent, PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-            return builder.addAuthenticationAction(AuthenticationAction(tr("Разблокировать sBoard"), pending)).build()
+            return builder.addAuthenticationAction(AuthenticationAction(tr("Открыть sPass"), pending)).build()
         }
         val store = PasskeyStore(context)
         options.forEach { option ->

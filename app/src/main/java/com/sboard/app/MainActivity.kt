@@ -42,6 +42,13 @@ class MainActivity : SecureActivity() {
         super.onCreate(savedInstanceState)
         handleIntent(intent)
         setContent { SBoardTheme { AppRoot() } }
+        // Needed for the "save password to sPass?" offer; asked once.
+        val prefs = getSharedPreferences("sboard_settings", MODE_PRIVATE)
+        if (android.os.Build.VERSION.SDK_INT >= 33 && !prefs.getBoolean("asked_notifications", false) &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            prefs.edit().putBoolean("asked_notifications", true).apply()
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 42)
+        }
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -105,12 +112,18 @@ private fun AppRoot() {
             }
             onboarding == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = palette.accent) }
             onboarding == true -> OnboardingFlow(onFinished = { onboarding = false })
-            !unlocked -> Box(Modifier.fillMaxSize().systemBarsPadding(), contentAlignment = Alignment.Center) {
-                UnlockPanel(onUnlocked = {})
-            }
+            // The app opens without a password; sPass and Profile ask for it (see MainShell).
             else -> MainShell(navigator)
         }
     }
+}
+
+/** Screens that show Vault contents or account/security settings need the unlocked Vault. */
+private fun needsUnlock(state: Any): Boolean = when (state) {
+    Tab.VAULT, Tab.PROFILE -> true
+    is Route.ItemDetail, is Route.ItemEdit, is Route.ItemHistory -> true
+    Route.Trash, Route.Security, Route.Sync, Route.Devices, Route.PasswordHealth -> true
+    else -> false
 }
 
 @Composable
@@ -139,7 +152,14 @@ private fun MainShell(nav: Navigator) {
             label = "nav",
             modifier = Modifier.fillMaxSize(),
         ) { state ->
-            when (state) {
+            val unlockedNow by VaultSessionProvider.session.unlocked.collectAsState()
+            if (!unlockedNow && needsUnlock(state)) {
+                Box(Modifier.fillMaxSize().statusBarsPadding().padding(bottom = 90.dp), contentAlignment = Alignment.Center) {
+                    UnlockPanel(title = com.sboard.app.core.i18n.tr("sPass"),
+                        subtitle = com.sboard.app.core.i18n.tr("Подтвердите, что это вы, чтобы открыть пароли и профиль"),
+                        onUnlocked = {})
+                }
+            } else when (state) {
                 Tab.HOME -> HomeScreen(nav)
                 Tab.KEYBOARD -> KeyboardScreen(nav)
                 Tab.VAULT -> VaultScreen(nav)

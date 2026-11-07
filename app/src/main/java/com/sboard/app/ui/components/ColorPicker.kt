@@ -1,5 +1,9 @@
 package com.sboard.app.ui.components
 
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -45,11 +49,19 @@ private fun fromHsv(h: Float, s: Float, v: Float): Long = android.graphics.Color
 /** HSV colour picker: saturation/value square, hue strip, HEX field and swatches. */
 @Composable
 fun ColorPicker(color: Long, onChange: (Long) -> Unit, modifier: Modifier = Modifier) {
-    val initial = remember(color) { hsv(color) }
-    var hue by remember(color) { mutableFloatStateOf(initial[0]) }
-    var sat by remember(color) { mutableFloatStateOf(initial[1]) }
-    var value by remember(color) { mutableFloatStateOf(initial[2]) }
-    fun emit() = onChange(fromHsv(hue, sat, value))
+    // Picker state lives across recompositions; it only follows [color] when it changes from outside
+    // (another element selected, preset, HEX). Dragging updates the colour continuously.
+    var hue by remember { mutableFloatStateOf(hsv(color)[0]) }
+    var sat by remember { mutableFloatStateOf(hsv(color)[1]) }
+    var value by remember { mutableFloatStateOf(hsv(color)[2]) }
+    var lastEmitted by remember { mutableStateOf(color) }
+    LaunchedEffect(color) {
+        if ((color and 0xFFFFFF) != (lastEmitted and 0xFFFFFF)) {
+            val h = hsv(color); hue = h[0]; sat = h[1]; value = h[2]; lastEmitted = color
+        }
+    }
+    val change by rememberUpdatedState(onChange)
+    fun emit() { val c = fromHsv(hue, sat, value); lastEmitted = c; change(c) }
     var hexText by remember(color) { mutableStateOf("%06X".format(color and 0xFFFFFF)) }
 
     Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -61,18 +73,20 @@ fun ColorPicker(color: Long, onChange: (Long) -> Unit, modifier: Modifier = Modi
                 if (clean.length == 6) onChange(0xFF000000L or clean.toLong(16))
             }, "HEX", Modifier.weight(1f), monospace = true)
         }
-        // Saturation (x) × brightness (y) square for the current hue.
+        // Saturation (x) × brightness (y) square for the current hue: touch and slide.
         val hueColor = Color(fromHsv(hue, 1f, 1f).toInt())
-        Box(Modifier.fillMaxWidth().height(180.dp).clip(SBoardShapes.medium)
-            .pointerInput(hue) {
-                fun update(o: Offset) {
-                    sat = (o.x / size.width).coerceIn(0f, 1f); value = 1f - (o.y / size.height).coerceIn(0f, 1f); emit()
-                }
-                detectTapGestures { update(it) }
-            }
-            .pointerInput(hue) {
-                detectDragGestures { change, _ ->
-                    sat = (change.position.x / size.width).coerceIn(0f, 1f); value = 1f - (change.position.y / size.height).coerceIn(0f, 1f); emit()
+        Box(Modifier.fillMaxWidth().height(170.dp).clip(SBoardShapes.medium)
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    fun update(o: Offset) { sat = (o.x / size.width).coerceIn(0f, 1f); value = 1f - (o.y / size.height).coerceIn(0f, 1f); emit() }
+                    update(down.position); down.consume()
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val p = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (!p.pressed) break
+                        update(p.position); p.consume()
+                    }
                 }
             }) {
             Canvas(Modifier.matchParentSize()) {
@@ -84,9 +98,18 @@ fun ColorPicker(color: Long, onChange: (Long) -> Unit, modifier: Modifier = Modi
             }
         }
         Text(tr("Оттенок"), style = MaterialTheme.typography.labelMedium, color = palette.textMuted)
-        Box(Modifier.fillMaxWidth().height(26.dp).clip(SBoardShapes.pill)
-            .pointerInput(Unit) { detectTapGestures { hue = (it.x / size.width * 360f).coerceIn(0f, 359.9f); emit() } }
-            .pointerInput(Unit) { detectDragGestures { ch, _ -> hue = (ch.position.x / size.width * 360f).coerceIn(0f, 359.9f); emit() } }) {
+        Box(Modifier.fillMaxWidth().height(30.dp).clip(SBoardShapes.pill)
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    hue = (down.position.x / size.width * 360f).coerceIn(0f, 359.9f); emit(); down.consume()
+                    while (true) {
+                        val p = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                        if (!p.pressed) break
+                        hue = (p.position.x / size.width * 360f).coerceIn(0f, 359.9f); emit(); p.consume()
+                    }
+                }
+            }) {
             Canvas(Modifier.matchParentSize()) {
                 drawRect(Brush.horizontalGradient((0..6).map { Color(fromHsv(it * 60f % 360f, 1f, 1f).toInt()) }))
                 val x = hue / 360f * size.width

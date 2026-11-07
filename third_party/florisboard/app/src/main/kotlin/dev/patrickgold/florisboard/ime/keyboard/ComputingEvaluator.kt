@@ -124,8 +124,9 @@ private fun computeLanguageDisplayName(locale: FlorisLocale, displayLanguageName
         return cachedDisplayName
     }
     val displayName = when (displayLanguageNamesIn) {
-        DisplayLanguageNamesIn.SYSTEM_LOCALE -> locale.displayName()
-        DisplayLanguageNamesIn.NATIVE_LOCALE -> locale.displayName(locale)
+        // Modified for sBoard: short labels ("English US") instead of "English (United States)".
+        DisplayLanguageNamesIn.SYSTEM_LOCALE -> org.sboard.keyboard.SBoardLocaleNames.short(locale.languageTag())
+        DisplayLanguageNamesIn.NATIVE_LOCALE -> org.sboard.keyboard.SBoardLocaleNames.short(locale.languageTag(), java.util.Locale.forLanguageTag(locale.languageTag()))
     }
     cachedDisplayNameState = Triple(locale, displayLanguageNamesIn, displayName)
     return displayName

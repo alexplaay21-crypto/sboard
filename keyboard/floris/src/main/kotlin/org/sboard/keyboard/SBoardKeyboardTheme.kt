@@ -48,13 +48,13 @@ data class KeyboardThemeSpec(
         /** Night default — palette inspired by a moonlit night sky (indigo, lavender, rose). */
         val NIGHT = KeyboardThemeSpec(
             background = 0xFF0B0D24, toolbarBackground = 0xFF0B0D24, toolbarIcons = 0xFFC9C3FF,
-            keyBackground = 0xFF1C1F4A, keyText = 0xFFF1EEFF, hintText = 0xFFA79BE0,
+            keyBackground = 0xFF1C1F4A, keyText = 0xFFF1EEFF, hintText = 0xFFCFC6FF,
             functionKeyBackground = 0xFF2A2C66, functionKeyText = 0xFFE7E1FF,
             accent = 0xFFB18CFF, keyBorder = 0xFF6F5BE8, keyStyle = KeyStyle.ROUNDED,
         )
         val DAY = KeyboardThemeSpec(
             background = 0xFFEEEBFB, toolbarBackground = 0xFFEEEBFB, toolbarIcons = 0xFF4B3C99,
-            keyBackground = 0xFFFFFFFF, keyText = 0xFF1C1838, hintText = 0xFF8A7FC2,
+            keyBackground = 0xFFFFFFFF, keyText = 0xFF1C1838, hintText = 0xFF5A4BB5,
             functionKeyBackground = 0xFFDCD6F7, functionKeyText = 0xFF2B2557,
             accent = 0xFF7357E0, keyBorder = 0xFFB9ACF2, keyStyle = KeyStyle.ROUNDED,
         )
@@ -76,10 +76,12 @@ object SBoardThemeStore {
     private fun specFile(context: Context, night: Boolean) = File(context.filesDir, "sboard_kb_theme_${if (night) "night" else "day"}.json")
     // Versioned name: a new app version regenerates stylesheets built from older templates.
     private fun stylesheetFile(context: Context, componentId: String) = File(context.filesDir, "sboard_kb_stylesheet_v${STYLE_VERSION}_$componentId.json")
-    private const val STYLE_VERSION = 2
+    private const val STYLE_VERSION = 3
 
     fun load(context: Context, night: Boolean): KeyboardThemeSpec = runCatching {
-        json.decodeFromString(KeyboardThemeSpec.serializer(), specFile(context, night).readText())
+        json.decodeFromString(KeyboardThemeSpec.serializer(), specFile(context, night).readText()).let {
+            when (it.hintText) { 0xFFA79BE0 -> it.copy(hintText = 0xFFCFC6FF); 0xFF8A7FC2 -> it.copy(hintText = 0xFF5A4BB5); else -> it }
+        }
     }.getOrElse { if (night) KeyboardThemeSpec.NIGHT else KeyboardThemeSpec.DAY }
 
     fun save(context: Context, night: Boolean, spec: KeyboardThemeSpec) {
@@ -146,6 +148,9 @@ object SBoardThemeStore {
         rule("smartbar-shared-actions-toggle", "font-size" to "${(spec.toolbarIconSize - 2).coerceIn(16, 32)}sp")
         rule("smartbar-extended-actions-toggle", "font-size" to "${(spec.toolbarIconSize - 2).coerceIn(16, 32)}sp")
         rule("key", "font-size" to "${(22 * spec.fontScale / 100)}sp", "font-weight" to spec.fontWeight.takeIf { it in setOf("normal", "medium", "bold") }.orEmpty().ifEmpty { "normal" })
+        // Long-press hints: larger and clearly readable (they used to be faint).
+        rule("key-hint", "font-size" to "${(13 * spec.fontScale / 100).coerceAtLeast(11)}sp", "font-weight" to "medium",
+            "foreground" to hex(spec.hintText), "padding" to "0dp 2dp 1dp 0dp")
         if (!spec.showHints) rule("key-hint", "foreground" to "transparent")
         val fnKeys = "key[code=-11,-7,-202,-201,-203,-227,-212,-213,-205,-233]"
         rule(fnKeys, "background" to hex(spec.functionKeyBackground), "foreground" to hex(spec.functionKeyText))

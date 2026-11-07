@@ -100,7 +100,7 @@ object Biometrics {
         } catch (_: Exception) {
             return AuthResult.Failed(tr("Биометрическая разблокировка недоступна"))
         }
-        return when (val result = promptCrypto(activity, cipher, tr("Разблокировать sBoard"))) {
+        return when (val result = promptCrypto(activity, cipher, tr("Открыть sPass"))) {
             is CryptoOutcome.Ok -> try {
                 val vaultKey = result.cipher.doFinal(envelope.ciphertext)
                 VaultKeyManager(activity).unlockWithRawKey(vaultKey)

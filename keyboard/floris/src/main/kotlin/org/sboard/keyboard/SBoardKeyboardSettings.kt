@@ -109,10 +109,17 @@ object SBoardKeyboardSettings {
         prefs.gestures.spaceBarSwipeLeft.set(if (language) dev.patrickgold.florisboard.ime.text.gestures.SwipeAction.SWITCH_TO_PREV_SUBTYPE else dev.patrickgold.florisboard.ime.text.gestures.SwipeAction.MOVE_CURSOR_LEFT)
         prefs.gestures.spaceBarSwipeRight.set(if (language) dev.patrickgold.florisboard.ime.text.gestures.SwipeAction.SWITCH_TO_NEXT_SUBTYPE else dev.patrickgold.florisboard.ime.text.gestures.SwipeAction.MOVE_CURSOR_RIGHT)
     }
-    /** Long-press on space: "languages" (list of keyboard languages) or "keyboards" (system picker). */
-    fun spaceLongPress(): String = if (prefs.gestures.spaceBarLongPress.get() == dev.patrickgold.florisboard.ime.text.gestures.SwipeAction.SHOW_SUBTYPE_PICKER) "languages" else "keyboards"
-    suspend fun setSpaceLongPress(value: String) = prefs.gestures.spaceBarLongPress.set(
-        if (value == "languages") dev.patrickgold.florisboard.ime.text.gestures.SwipeAction.SHOW_SUBTYPE_PICKER else dev.patrickgold.florisboard.ime.text.gestures.SwipeAction.SHOW_INPUT_METHOD_PICKER)
+    /** Long-press on space: "none" (hold and drag moves the cursor), "languages" or "keyboards". */
+    fun spaceLongPress(): String = when (prefs.gestures.spaceBarLongPress.get()) {
+        dev.patrickgold.florisboard.ime.text.gestures.SwipeAction.SHOW_SUBTYPE_PICKER -> "languages"
+        dev.patrickgold.florisboard.ime.text.gestures.SwipeAction.SHOW_INPUT_METHOD_PICKER -> "keyboards"
+        else -> "none"
+    }
+    suspend fun setSpaceLongPress(value: String) = prefs.gestures.spaceBarLongPress.set(when (value) {
+        "languages" -> dev.patrickgold.florisboard.ime.text.gestures.SwipeAction.SHOW_SUBTYPE_PICKER
+        "keyboards" -> dev.patrickgold.florisboard.ime.text.gestures.SwipeAction.SHOW_INPUT_METHOD_PICKER
+        else -> dev.patrickgold.florisboard.ime.text.gestures.SwipeAction.NO_ACTION
+    })
     /** Swipe left on Delete selects and deletes whole words. */
     fun deleteSwipeWords(): Boolean = prefs.gestures.deleteKeySwipeLeft.get() == dev.patrickgold.florisboard.ime.text.gestures.SwipeAction.DELETE_WORDS_PRECISELY
     suspend fun setDeleteSwipeWords(value: Boolean) = prefs.gestures.deleteKeySwipeLeft.set(
@@ -198,7 +205,7 @@ object SBoardKeyboardSettings {
     fun languages(context: Context): List<Language> {
         val presets = context.keyboardManager().value.resources.subtypePresets.value.orEmpty()
         val enabled = context.subtypeManager().value.subtypes.map { it.primaryLocale.languageTag() }.toSet()
-        return presets.map { Language(it.locale.languageTag(), it.locale.displayName(FlorisLocale.default()).replaceFirstChar { c -> c.uppercase() }, it.locale.languageTag() in enabled) }
+        return presets.map { Language(it.locale.languageTag(), SBoardLocaleNames.short(it.locale.languageTag()), it.locale.languageTag() in enabled) }
             .distinctBy { it.tag }
             .sortedWith(compareByDescending<Language> { it.enabled }.thenBy { it.name })
     }

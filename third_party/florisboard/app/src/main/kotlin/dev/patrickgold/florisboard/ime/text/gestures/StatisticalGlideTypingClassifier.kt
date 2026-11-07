@@ -223,7 +223,8 @@ class StatisticalGlideTypingClassifier(context: Context) : GlideTypingClassifier
                 val shapeProbability = calcGaussianProbability(shapeDistance, 0.0f, SHAPE_STD)
                 val locationProbability = calcGaussianProbability(locationDistance, 0.0f, LOCATION_STD * radius)
                 // sBoard: calibrated word prior (see LatinLanguageProvider.getFrequencyForWord).
-                val frequency = (wordPriors.getOrPut(word) { nlpManager.getFrequencyForWord(currentSubtype!!, word).toFloat() } * 1000f).coerceAtLeast(1e-3f)
+                val frequency = (wordPriors.getOrPut(word) { nlpManager.getFrequencyForWord(currentSubtype!!, word).toFloat() } * 1000f).coerceAtLeast(1e-3f) *
+                    org.sboard.keyboard.SBoardUserModel.contextBoost(currentSubtype!!.primaryLocale.language, word)
                 val confidence = 1.0f / (shapeProbability * locationProbability * frequency)
 
                 var candidateDistanceSortedIndex = 0

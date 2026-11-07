@@ -75,7 +75,6 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
         // subtype.secondaryLocales.
 
         val language = subtype.primaryLocale.language
-        if (language != "en" && language != "ru") return@withContext
         wordData.withLock { dictionaries ->
             if (language !in dictionaries) {
                 dictionaries[language] = when (language) {
@@ -89,11 +88,20 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
                         // 10k list); see THIRD_PARTY_NOTICES. More word forms = better swipe and suggestions.
                         RankedWordList.parse(appContext.assets.readText("ime/dict/russian_words.txt"))
                     }
-                    else -> emptyMap()
+                    // sBoard: 20k most frequent words for other languages (FrequencyWords, CC BY-SA 4.0).
+                    else -> runCatching { RankedWordList.parse(appContext.assets.readText("ime/dict/words_${dictionaryFile(language)}.txt")) }
+                        .getOrDefault(emptyMap())
                 }
             }
         }
     }
+
+    private fun dictionaryFile(language: String) = when (language) {
+        "iw" -> "he"; "nb", "nn" -> "no"; "in" -> "id"; else -> language
+    }
+
+    /** English uses a 0..255 frequency scale, every other dictionary is rank-based. */
+    private fun maxFrequencyFor(language: String) = if (language == "en") 255 else RankedWordList.MAX_RANK
 
     override suspend fun spell(
         subtype: Subtype,
@@ -106,7 +114,6 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
     ): SpellingResult {
         if (isPrivateSession) return SpellingResult.unspecified()
         val language = subtype.primaryLocale.language
-        if (language != "en" && language != "ru") return SpellingResult.unspecified()
         val normalized = word.lowercase(Locale.ROOT)
         if (org.sboard.keyboard.SBoardUserModel.count(language, normalized) >= 2) return SpellingResult.validWord()
         if (normalized.isBlank() || normalized.any { !it.isLetter() && it != '\'' && it != '’' }) {
@@ -144,7 +151,7 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
         val personal = personalDictionary(query, subtype)
         return wordData.withLock { dictionaries ->
             val dictionary = dictionaries[language] ?: emptyMap()
-            val maxFrequency = if (language == "ru") RankedWordList.MAX_RANK else 255
+            val maxFrequency = maxFrequencyFor(language)
             val known = query in dictionary || org.sboard.keyboard.SBoardUserModel.count(language, query) >= 2 ||
                 personal.any { it.first.equals(query, ignoreCase = true) }
             val results = LinkedHashMap<String, WordSuggestionCandidate>()
@@ -160,10 +167,16 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
             // 1. Text shortcuts from the personal dictionary ("др" → "день рождения").
             personal.filter { it.second }.forEach { add(it.first, 1.0) }
             // 2. Auto-correction of an unknown word with one typo to a frequent dictionary word.
-            if (!known && org.sboard.keyboard.SBoardUserModel.autoCorrectEnabled && query.length >= 4) {
+            if (!known && org.sboard.keyboard.SBoardUserModel.autoCorrectEnabled && query.length >= 3 &&
+                org.sboard.keyboard.SBoardUserModel.shouldAutoCorrect(language, query)) {
                 LatinWordEngine.correct(query, dictionary, 3).firstOrNull()?.let { best ->
                     val share = best.frequency.toDouble() / maxFrequency
-                    if (share > 0.6) add(best.word, share, autoCommit = true)
+                    // Neighbour-key slips are corrected even for less frequent words.
+                    val threshold = if (best.distance == 1) 0.45 else 0.7
+                    if (share > threshold) {
+                        add(best.word, share, autoCommit = true)
+                        pendingCorrection = language to query
+                    }
                 }
             }
             // 3. Words the user types often, then personal dictionary words, then the dictionary.
@@ -199,7 +212,14 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
         }
     }
 
+    /** (language, typed word) of the auto-correction currently offered. */
+    @Volatile private var pendingCorrection: Pair<String, String>? = null
+
     override suspend fun notifySuggestionAccepted(subtype: Subtype, candidate: SuggestionCandidate) {
+        if (candidate.isEligibleForAutoCommit) pendingCorrection?.let { (lang, typed) ->
+            org.sboard.keyboard.SBoardUserModel.noteAutoCorrected(lang, typed)
+            pendingCorrection = null
+        }
         // We can use flogDebug, flogInfo, flogWarning and flogError for debug logging, which is a wrapper for Logcat
         flogDebug { candidate.toString() }
     }
@@ -235,7 +255,7 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
             val value = dictionary?.get(normalized)
             when {
                 value == null -> 0.002
-                language == "ru" -> 300.0 / ((RankedWordList.MAX_RANK - value).coerceAtLeast(0) + 300.0)
+                language != "en" -> 300.0 / ((RankedWordList.MAX_RANK - value).coerceAtLeast(0) + 300.0)
                 else -> Math.pow(10.0, (value - 255) / 51.0)
             }
         }

@@ -1,5 +1,6 @@
 package com.sboard.app.ui.screens
 
+import androidx.lifecycle.withStateAtLeast
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -60,16 +61,26 @@ fun UnlockPanel(
     var shake by remember { mutableIntStateOf(0) }
     val offset by animateFloatAsState(if (shake % 2 == 1) 1f else 0f, label = "shake")
 
+    var biometricRunning by remember { mutableStateOf(false) }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     fun biometric() {
         val host = activity ?: return
+        if (biometricRunning) return
         scope.launch {
-            busy = true
-            when (val r = Biometrics.unlock(host)) {
-                AuthResult.Success -> onUnlocked()
-                is AuthResult.Failed -> error = r.message
-                AuthResult.Cancelled -> Unit
-            }
-            busy = false
+            // The prompt is only shown once the screen is really in front: started earlier (while the
+            // app is coming back from the background) Android can drop it silently, which used to
+            // leave the unlock screen "loading" forever.
+            lifecycleOwner.lifecycle.withStateAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) {}
+            biometricRunning = true
+            try {
+                when (val r = kotlinx.coroutines.withTimeoutOrNull(120_000) { Biometrics.unlock(host) }) {
+                    AuthResult.Success -> onUnlocked()
+                    is AuthResult.Failed -> error = r.message
+                    AuthResult.Cancelled, null -> Unit
+                }
+            } catch (e: Exception) {
+                error = e.message ?: tr("Биометрическая разблокировка недоступна")
+            } finally { biometricRunning = false }
         }
     }
 
@@ -118,7 +129,7 @@ fun UnlockPanel(
         PrimaryButton(tr("Разблокировать"), { submit() }, enabled = password.isNotEmpty(), loading = busy)
         if (busy) Text(tr("Проверяем ключ… Это занимает около секунды."), style = MaterialTheme.typography.bodySmall, color = palette.textMuted)
         if (biometricEnabled && !recoveryMode) {
-            SecondaryButton(tr("Войти по биометрии"), { biometric() }, icon = Icons.Rounded.Fingerprint, enabled = !busy)
+            SecondaryButton(tr("Войти по биометрии"), { biometric() }, icon = Icons.Rounded.Fingerprint, enabled = !busy && !biometricRunning)
         }
         if (recoveryMode) {
             TextButton(onClick = { recoveryMode = false; resetAfterUnlock = false; password = ""; error = null }) {

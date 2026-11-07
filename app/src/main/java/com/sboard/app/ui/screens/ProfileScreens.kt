@@ -458,7 +458,7 @@ fun AppLanguageList(onPicked: () -> Unit = {}) {
             val subtitle = when {
                 code == SBoardI18n.MODE_SYSTEM -> tr("Как в настройках телефона")
                 lang == "ru" || lang == "en" -> tr("Встроенный")
-                SBoardI18n.hasPack(lang) -> tr("Загружен · машинный перевод")
+                SBoardI18n.hasPack(lang) -> tr("Встроенный · машинный перевод")
                 else -> tr("Машинный перевод · загрузится один раз")
             }
             ListRow(languageLabel(code), subtitle, icon = if (code == current) Icons.Rounded.CheckCircle else Icons.Rounded.Language,
@@ -474,7 +474,7 @@ fun AppLanguageScreen(nav: Navigator) {
         TopBar(tr("Язык интерфейса"), { nav.pop() })
         ScreenList(bottomPadding = 40.dp) {
             item { SBCard(padding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)) { AppLanguageList(onPicked = { nav.pop() }) } }
-            item { Text(tr("Русский и английский встроены. Остальные языки переводятся автоматически: при выборе sBoard один раз отправляет в переводчик только тексты меню — никаких ваших данных."),
+            item { Text(tr("Все языки встроены в приложение и работают без интернета. Русский и английский переведены вручную, остальные — машинным переводом."),
                 style = MaterialTheme.typography.bodySmall, color = palette.textFaint) }
         }
     }

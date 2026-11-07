@@ -147,6 +147,8 @@ class SyncEngine(context: Context, private val drive: DriveClient = DriveClient(
                 if (drive.metadata(token, main.id).version != main.version) return@repeat
                 drive.update(token, main.id, content, generation, recoveryProperty())
                 files.drop(1).forEach { runCatching { drive.delete(token, it.id) } }
+                // Only the newest copy is kept: no extra files, no old revisions.
+                runCatching { drive.pruneRevisions(token, main.id) }
             }
             merge.upload.forEach { dao.markSynced(it.id, SyncMerger.recordHash(it)) }
             dao.purgeSyncedTombstones(now - SyncMerger.TOMBSTONE_TTL_MS)

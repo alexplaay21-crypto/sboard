@@ -44,17 +44,20 @@ fun HomeScreen(nav: Navigator) {
     val context = LocalContext.current
     val repo = remember { VaultRepository.get(context) }
     val items by repo.items.collectAsState()
+    val unlocked by com.sboard.app.core.security.VaultSessionProvider.session.unlocked.collectAsState()
     val pending by repo.pendingSyncCount.collectAsState(0)
     val sync by SyncStatus.snapshot.collectAsState()
     val account by GoogleAccount.account.collectAsState()
     var keyboardOn by remember { mutableStateOf(true) }
     var autofillOn by remember { mutableStateOf(true) }
+    var otpAccess by remember { mutableStateOf(true) }
     var health by remember { mutableStateOf<PasswordHealth.Report?>(null) }
     val lifecycle = LocalLifecycleOwner.current
     LaunchedEffect(lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             keyboardOn = SystemIntegration.isKeyboardEnabled(context)
             autofillOn = SystemIntegration.isAutofillEnabled(context)
+            otpAccess = com.sboard.app.feature.otpinbox.OtpInbox.hasAccess(context)
         }
     }
     LaunchedEffect(items) { health = withContext(Dispatchers.Default) { PasswordHealth.analyze(items) } }
@@ -86,7 +89,7 @@ fun HomeScreen(nav: Navigator) {
             ) {
                 Icon(Icons.Rounded.Search, null, tint = palette.textMuted)
                 Spacer(Modifier.width(10.dp))
-                Text(tr("Поиск по хранилищу"), color = palette.textMuted, style = MaterialTheme.typography.bodyMedium)
+                Text(tr("Поиск в sPass"), color = palette.textMuted, style = MaterialTheme.typography.bodyMedium)
             }
         }
         item {
@@ -94,12 +97,12 @@ fun HomeScreen(nav: Navigator) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(tr("Состояние защиты"), style = MaterialTheme.typography.titleMedium, color = palette.text)
-                        Text(tr("Записей в хранилище: {0}", items.size), style = MaterialTheme.typography.bodySmall, color = palette.textMuted)
+                        Text(if (unlocked) tr("Записей в sPass: {0}", items.size) else tr("sPass закрыт — данные зашифрованы"), style = MaterialTheme.typography.bodySmall, color = palette.textMuted)
                     }
                     IconBadge(Icons.Rounded.Shield)
                 }
                 Divider()
-                StatusLine(tr("Хранилище"), tr("Разблокировано"), palette.success)
+                StatusLine("sPass", if (unlocked) tr("Открыт") else tr("Закрыт"), if (unlocked) palette.success else palette.accent)
                 StatusLine("Google Drive", when {
                     account == null -> tr("Не подключён")
                     sync.state == SyncState.RUNNING -> tr("Синхронизация…")
@@ -118,16 +121,21 @@ fun HomeScreen(nav: Navigator) {
                 }
             }
         }
-        if (!keyboardOn || !autofillOn || account == null) {
+        if (!keyboardOn || !autofillOn || account == null || !otpAccess) {
             item { SectionTitle(tr("Завершите настройку")) }
             if (!keyboardOn) item {
                 SBCard(onClick = { SystemIntegration.openKeyboardSettings(context) }) {
-                    ListRow(tr("Включите клавиатуру sBoard"), tr("Раскладки RU/EN, подсказки и панель sBoard Pass"), icon = Icons.Rounded.Keyboard)
+                    ListRow(tr("Включите клавиатуру sBoard"), tr("Раскладки, подсказки и панель sPass"), icon = Icons.Rounded.Keyboard)
                 }
             }
             if (!autofillOn && SystemIntegration.isAutofillSupported(context)) item {
                 SBCard(onClick = { SystemIntegration.openAutofillSettings(context) }) {
                     ListRow(tr("Включите автозаполнение"), tr("Подставляйте логины и пароли в приложения и браузеры"), icon = Icons.Rounded.AutoAwesome)
+                }
+            }
+            if (!otpAccess) item {
+                SBCard(onClick = { com.sboard.app.feature.otpinbox.OtpInbox.openAccessSettings(context) }) {
+                    ListRow(tr("Автокопирование кодов"), tr("Коды из SMS, Telegram, WhatsApp и почты сами копируются и подставляются"), icon = Icons.Rounded.Sms)
                 }
             }
             if (account == null) item {
@@ -151,6 +159,14 @@ fun HomeScreen(nav: Navigator) {
                 }
             }
         }
+        if (!unlocked) {
+            item {
+                SBCard(onClick = { nav.openVault() }) {
+                    ListRow(tr("Открыть sPass"), tr("Пароли, карты, коды и заметки — после отпечатка или мастер-пароля"), icon = Icons.Rounded.Lock)
+                }
+            }
+            return@ScreenList
+        }
         val favorites = items.filter { it.favorite }
         if (favorites.isNotEmpty()) {
             item { SectionTitle(tr("Избранное"), action = tr("Все"), onAction = { nav.openVault("favorites") }) }
@@ -171,7 +187,7 @@ fun HomeScreen(nav: Navigator) {
             }
         }
         val recent = items.sortedByDescending { it.updatedAt }.take(5)
-        item { SectionTitle(tr("Недавние"), action = if (recent.isNotEmpty()) tr("Хранилище") else null, onAction = { nav.openVault() }) }
+        item { SectionTitle(tr("Недавние"), action = if (recent.isNotEmpty()) "sPass" else null, onAction = { nav.openVault() }) }
         if (recent.isEmpty()) {
             item {
                 EmptyState(Icons.Rounded.Lock, tr("Хранилище пустое"), tr("Добавьте первый пароль, карту или заметку — они будут зашифрованы на устройстве."),

@@ -42,7 +42,8 @@ class EmojiSuggestionProvider(private val context: Context) : SuggestionProvider
     override val providerId = "org.florisboard.nlp.providers.emoji"
 
     private val prefs by FlorisPreferenceStore
-    private val lettersRegex = "^[A-Za-z]*$".toRegex()
+    // Modified for sBoard: any script (Cyrillic etc.), not only A-Z.
+    private val lettersRegex = "^[\\p{L}\\p{M}]*$".toRegex()
 
     private val cachedEmojiMappings = Cache.Builder().build<FlorisLocale, EmojiDataBySkinTone>()
 
@@ -66,8 +67,27 @@ class EmojiSuggestionProvider(private val context: Context) : SuggestionProvider
     ): List<SuggestionCandidate> {
         val preferredSkinTone = prefs.emoji.preferredSkinTone.get()
         val showName = prefs.emoji.suggestionCandidateShowName.get()
-        val query = validateInputQuery(content.composingText) ?: return emptyList()
+        val query = validateInputQuery(content.composingText.ifEmpty { content.currentWordText }) ?: return emptyList()
         val emojis = cachedEmojiMappings.get(subtype.primaryLocale)?.get(preferredSkinTone) ?: emptyList()
+        val inline = prefs.emoji.suggestionType.get().prefix.isEmpty()
+        if (inline) {
+            // sBoard: next to word suggestions show at most 2 emoji whose keyword starts with the word.
+            return withContext(Dispatchers.Default) {
+                emojis.asSequence()
+                    .mapNotNull { emoji ->
+                        val words = emoji.keywords + emoji.name.split(' ')
+                        when {
+                            words.any { it.equals(query, ignoreCase = true) } -> emoji to 2
+                            query.length >= 4 && words.any { it.startsWith(query, ignoreCase = true) } -> emoji to 1
+                            else -> null
+                        }
+                    }
+                    .sortedByDescending { it.second }
+                    .take(2)
+                    .map { (emoji, _) -> EmojiSuggestionCandidate(emoji = emoji, showName = showName, sourceProvider = this@EmojiSuggestionProvider) }
+                    .toList()
+            }
+        }
         val candidates = withContext(Dispatchers.Default) {
             emojis.parallelStream()
                 .map { emoji ->

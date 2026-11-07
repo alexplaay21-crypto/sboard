@@ -125,11 +125,21 @@ fun TranslateBar() {
             }
         }
         if (picking) {
-            LazyRow(Modifier.fillMaxWidth().height(FlorisImeSizing.smartbarHeight), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                items(translator.languages.filter { it.first != "auto" }, key = { it.first }) { (code, label) ->
+            // Grid of languages (recent ones first) instead of a long scrolling strip.
+            val recent = remember { translator.recent() }
+            val all = translator.languages.filter { it.first != "auto" }
+            val ordered = recent.mapNotNull { code -> all.firstOrNull { it.first == code } } + all.filter { it.first !in recent }
+            androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                columns = androidx.compose.foundation.lazy.grid.GridCells.Adaptive(104.dp),
+                modifier = Modifier.fillMaxWidth().height(FlorisImeSizing.smartbarHeight * 3.4f).padding(horizontal = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                items(ordered.size, key = { ordered[it].first }) { index -> val (code, label) = ordered[index]
                     SnyggChip(FlorisImeUi.ClipboardFilterChip.elementName,
                         attributes = mapOf("state" to if (code == to) "active" else "inactive"),
-                        onClick = { to = code; translator.savePair(from, to); picking = false }, text = label)
+                        onClick = { to = code; translator.savePair(from, to); translator.rememberRecent(code); picking = false },
+                        text = (if (code in recent) "★ " else "") + label)
                 }
             }
         }

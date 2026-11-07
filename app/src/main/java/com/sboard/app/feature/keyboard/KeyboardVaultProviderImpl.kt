@@ -71,8 +71,11 @@ class KeyboardVaultProviderImpl(private val context: Context) : VaultKeyboardPro
 
     override fun lock() = VaultSessionProvider.session.lock()
 
+    override fun offerPasswordSave(context: Context, packageName: String, username: String, password: String) =
+        com.sboard.app.feature.autofill.KeyboardSaveOffer.offer(context, packageName, username, password)
+
     override fun text(key: String): String = when (key) {
-        "disabled_title" -> tr("sBoard Pass выключен")
+        "disabled_title" -> tr("sPass выключен")
         "disabled_message" -> tr("Включите его в приложении sBoard → Клавиатура")
         "locked_title" -> tr("Хранилище заблокировано")
         "locked_message" -> tr("Разблокируйте sBoard, чтобы вставлять данные")
