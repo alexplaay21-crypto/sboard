@@ -80,6 +80,17 @@
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.SBoard" />
 
+        <!-- One-time codes from notifications (explicit notification access required) -->
+        <service
+            android:name=".feature.otpinbox.OtpNotificationListener"
+            android:label="@string/otp_listener_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <!-- Keyboard: unlock / confirmation before inserting Vault secrets -->
         <activity
             android:name=".feature.keyboard.KeyboardAuthActivity"

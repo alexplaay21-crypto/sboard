@@ -15,6 +15,13 @@ import com.sboard.app.data.ItemType
 import com.sboard.app.data.VaultItem
 import com.sboard.app.feature.otp.TotpCodes
 
+/** Remembers which item was filled into a site/app for a few minutes (multi-step logins). */
+object LastFill {
+    private val entries = HashMap<String, Pair<String, Long>>()
+    @Synchronized fun remember(target: String, itemId: String) { entries[target] = itemId to System.currentTimeMillis() }
+    @Synchronized fun recent(target: String): String? = entries[target]?.takeIf { System.currentTimeMillis() - it.second < 5 * 60_000 }?.first
+}
+
 /** Builds Autofill datasets. Values are only attached after the user confirmed in [AutofillActivity]. */
 @Suppress("DEPRECATION")
 object AutofillDatasets {
@@ -52,15 +59,31 @@ object AutofillDatasets {
         }.take(20)
     }
 
-    private fun linked(item: VaultItem, domain: String?, packageName: String): Boolean {
+    private val genericTokens = setOf("com", "org", "net", "ru", "app", "apps", "android", "mobile", "client", "www", "lite",
+        "pro", "beta", "free", "main", "official", "inc", "ltd", "llc", "global", "mobileapp", "application")
+
+    /** Meaningful words of an Android package name, e.g. com.instagram.android → [instagram]. */
+    internal fun packageTokens(packageName: String): Set<String> =
+        packageName.lowercase().split('.', '_', '-').filter { it.length >= 3 && it !in genericTokens }.toSet()
+
+    internal fun linked(item: VaultItem, domain: String?, packageName: String): Boolean {
         val login = item.payload.login
+        if (LastFill.recent(domain ?: packageName) == item.id) return true
         if (domain != null) {
             val urls = login?.urls.orEmpty() + listOfNotNull(item.payload.totp?.issuer?.takeIf { it.contains('.') })
             return urls.any { DomainMatcher.matches(it, domain) }
         }
         if (isBrowser(packageName)) return false
-        return login?.packageNames?.contains(packageName) == true ||
-            login?.urls.orEmpty().any { it.removePrefix("androidapp://") == packageName }
+        if (login?.packageNames?.contains(packageName) == true || login?.urls.orEmpty().any { it.removePrefix("androidapp://") == packageName }) return true
+        // Heuristic for apps not linked yet: the site's name appears in the package (instagram.com ↔ com.instagram.android).
+        val tokens = packageTokens(packageName)
+        if (tokens.isEmpty()) return false
+        val siteNames = login?.urls.orEmpty().mapNotNull { DomainMatcher.hostOf(it) }
+            .map { DomainMatcher.registrableDomain(it).substringBefore('.') }
+        val titleName = item.title.lowercase().filter { it.isLetterOrDigit() }
+        val issuer = item.payload.totp?.issuer?.lowercase()?.filter { it.isLetterOrDigit() }
+        return siteNames.any { it.length >= 3 && it in tokens } || (titleName.length >= 3 && titleName in tokens) ||
+            (!issuer.isNullOrBlank() && issuer.length >= 3 && issuer in tokens)
     }
 
     /** Field values to fill for [item] on [form]. */
@@ -93,11 +116,15 @@ object AutofillDatasets {
         return out
     }
 
-    fun filledDataset(context: Context, item: VaultItem, form: ParsedForm): Dataset? {
+    fun filledDataset(context: Context, item: VaultItem, form: ParsedForm,
+                      inlineRequest: android.view.inputmethod.InlineSuggestionsRequest? = null, inlineIndex: Int = 0): Dataset? {
         val values = values(item, form)
         if (values.isEmpty()) return null
         val pres = presentation(context, item.title, item.subtitle())
-        return Dataset.Builder(pres).apply { values.forEach { (id, v) -> setValue(id, AutofillValue.forText(v), pres) } }.build()
+        return Dataset.Builder(pres).apply {
+            values.forEach { (id, v) -> setValue(id, AutofillValue.forText(v), pres) }
+            if (Build.VERSION.SDK_INT >= 30) inlinePresentation(context, inlineRequest, inlineIndex, item.title, item.subtitle())?.let { setInlinePresentation(it) }
+        }.build()
     }
 
     /** Dataset whose values are released only after confirmation in [AutofillActivity]. */

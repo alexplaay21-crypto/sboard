@@ -48,6 +48,8 @@ interface KeyboardTranslator {
 object SBoardVaultBridge {
     @Volatile var provider: VaultKeyboardProvider? = null
     @Volatile var translator: KeyboardTranslator? = null
+    /** Live translation bar above the keys (Samsung Keyboard style). */
+    val translateBarVisible = kotlinx.coroutines.flow.MutableStateFlow(false)
 
     private data class Pending(val text: String, val targetPackage: String?, val createdAt: Long)
     @Volatile private var pending: Pending? = null

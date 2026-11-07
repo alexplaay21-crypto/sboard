@@ -759,13 +759,13 @@ abstract class FlorisPreferenceModel : PreferenceModel() {
         val dayThemeId = custom(
             key = "theme__day_theme_id",
             // Modified for sBoard: bundled brand theme derived under Apache-2.0.
-            default = ExtensionComponentName("org.sboard.themes", "sboard_light"),
+            default = ExtensionComponentName("org.sboard.themes", "sboard_custom_day"),
             serializer = ExtensionComponentName.Serializer,
         )
         val nightThemeId = custom(
             key = "theme__night_theme_id",
             // Modified for sBoard: bundled brand theme derived under Apache-2.0.
-            default = ExtensionComponentName("org.sboard.themes", "sboard_dark"),
+            default = ExtensionComponentName("org.sboard.themes", "sboard_custom_night"),
             serializer = ExtensionComponentName.Serializer,
         )
         val accentColor = custom(

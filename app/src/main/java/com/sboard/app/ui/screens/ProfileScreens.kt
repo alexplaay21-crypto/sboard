@@ -277,6 +277,13 @@ fun AppearanceScreen(nav: Navigator) {
                     Text(tr("Тему клавиатуры можно выбрать отдельно в разделе «Клавиатура»."), style = MaterialTheme.typography.bodySmall, color = palette.textFaint)
                 }
             }
+            item { SectionTitle(tr("Цветовая палитра")) }
+            item {
+                SBCard {
+                    SegmentedControl(listOf("night" to tr("Лунная ночь"), "graphite" to tr("Графит и золото")), AppSettings.appPalette.value, { AppSettings.setAppPalette(it) })
+                    Text(tr("«Лунная ночь» — глубокий индиго с лавандовым свечением и розовыми акцентами."), style = MaterialTheme.typography.bodySmall, color = palette.textFaint)
+                }
+            }
             item { SectionTitle(tr("Язык интерфейса")) }
             item {
                 SBCard {

@@ -79,7 +79,49 @@ val LightPalette = Palette(
     navBar = Color(0xFFFFFFFF),
 )
 
-val LocalPalette = staticCompositionLocalOf { DarkPalette }
+/** "Moonlit night" palette (default): deep indigo, lavender glow and rose accents. */
+val NightDarkPalette = Palette(
+    isDark = true,
+    background = Color(0xFF0B0D24),
+    surface = Color(0xFF151838),
+    surfaceHigh = Color(0xFF1D2150),
+    surfaceHighest = Color(0xFF272B62),
+    outline = Color(0xFF2E3270),
+    text = Color(0xFFF1EEFF),
+    textMuted = Color(0xFFA9A4D0),
+    textFaint = Color(0xFF6F6A99),
+    accent = Color(0xFFB79CFF),
+    onAccent = Color(0xFF1A1238),
+    accentSoft = Color(0xFF2B2560),
+    danger = Color(0xFFFF7AA2),
+    success = Color(0xFF7FE0C2),
+    warning = Color(0xFFFFC97A),
+    navBar = Color(0xFF14173A),
+)
+
+val NightLightPalette = Palette(
+    isDark = false,
+    background = Color(0xFFF3F1FC),
+    surface = Color(0xFFFFFFFF),
+    surfaceHigh = Color(0xFFEDE9FB),
+    surfaceHighest = Color(0xFFE2DCF7),
+    outline = Color(0xFFDCD5F3),
+    text = Color(0xFF1C1838),
+    textMuted = Color(0xFF5F5A85),
+    textFaint = Color(0xFF9A95BD),
+    accent = Color(0xFF6B4FD8),
+    onAccent = Color(0xFFFFFFFF),
+    accentSoft = Color(0xFFE9E2FF),
+    danger = Color(0xFFC8336A),
+    success = Color(0xFF2E8B6E),
+    warning = Color(0xFFB7791F),
+    navBar = Color(0xFFFFFFFF),
+)
+
+/** Secondary accent (rose) used for highlights and gradients. */
+val Rose = Color(0xFFE45FA2)
+
+val LocalPalette = staticCompositionLocalOf { NightDarkPalette }
 
 object SBoardShapes {
     val small = RoundedCornerShape(12.dp)
@@ -132,7 +174,13 @@ fun isDarkTheme(): Boolean = when (AppSettings.themeMode.value) {
 @Composable
 fun SBoardTheme(content: @Composable () -> Unit) {
     val dark = isDarkTheme()
-    val palette = if (dark) DarkPalette else LightPalette
+    val graphite = AppSettings.appPalette.value == "graphite"
+    val palette = when {
+        graphite && dark -> DarkPalette
+        graphite -> LightPalette
+        dark -> NightDarkPalette
+        else -> NightLightPalette
+    }
     val view = androidx.compose.ui.platform.LocalView.current
     if (!view.isInEditMode) {
         androidx.compose.runtime.SideEffect {

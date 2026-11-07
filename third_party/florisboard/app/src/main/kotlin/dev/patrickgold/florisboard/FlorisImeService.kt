@@ -367,6 +367,7 @@ class FlorisImeService : LifecycleInputMethodService() {
             activeState.isSelectionMode = editorInfo.initialSelection.isSelectionMode
             editorInstance.handleStartInputView(editorInfo, isRestart = restarting)
         }
+        if (!restarting) org.sboard.keyboard.SBoardVaultBridge.translateBarVisible.value = false
         // Modified for sBoard: commit a Vault value the user approved in the confirmation activity.
         org.sboard.keyboard.SBoardVaultBridge.consumePending(editorInfo.packageName)?.let { text ->
             android.os.Handler(mainLooper).postDelayed({ editorInstance.commitText(text) }, 120)
@@ -680,7 +681,14 @@ class FlorisImeService : LifecycleInputMethodService() {
                                 .weight(keyboardWeight)
                                 .wrapContentHeight(),
                         ) {
-                            when (state.imeUiMode) {
+                            // Modified for sBoard: live translation bar above the keys.
+                            val translateBar by org.sboard.keyboard.SBoardVaultBridge.translateBarVisible.collectAsState()
+                            if (translateBar && state.imeUiMode == ImeUiMode.TEXT) {
+                                androidx.compose.foundation.layout.Column {
+                                    org.sboard.keyboard.TranslateBar()
+                                    TextInputLayout()
+                                }
+                            } else when (state.imeUiMode) {
                                 ImeUiMode.TEXT -> TextInputLayout()
                                 ImeUiMode.MEDIA -> MediaInputLayout()
                                 ImeUiMode.CLIPBOARD -> ClipboardInputLayout()

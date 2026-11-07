@@ -24,6 +24,9 @@ object AppSettings {
     val autoSync: MutableState<Boolean> = mutableStateOf(true)
     val syncOnUnmeteredOnly: MutableState<Boolean> = mutableStateOf(false)
     val keyboardVaultBar: MutableState<Boolean> = mutableStateOf(true)
+    val otpFromNotifications: MutableState<Boolean> = mutableStateOf(true)
+    val otpAutoCopy: MutableState<Boolean> = mutableStateOf(true)
+    val appPalette: MutableState<String> = mutableStateOf("night")
 
     @Synchronized
     fun initialize(context: Context) {
@@ -37,6 +40,9 @@ object AppSettings {
         autoSync.value = prefs.getBoolean("auto_sync", true)
         syncOnUnmeteredOnly.value = prefs.getBoolean("sync_unmetered_only", false)
         keyboardVaultBar.value = prefs.getBoolean("keyboard_vault_bar", true)
+        otpFromNotifications.value = prefs.getBoolean("otp_notifications", true)
+        otpAutoCopy.value = prefs.getBoolean("otp_auto_copy", true)
+        appPalette.value = prefs.getString("app_palette", "night") ?: "night"
     }
 
     fun setTheme(value: String) { themeMode.value = value; prefs.edit().putString("theme", value).apply() }
@@ -46,5 +52,8 @@ object AppSettings {
     fun setScreenSecurity(value: Boolean) { screenSecurity.value = value; prefs.edit().putBoolean("screen_security", value).apply() }
     fun setAutoSync(value: Boolean) { autoSync.value = value; prefs.edit().putBoolean("auto_sync", value).apply() }
     fun setSyncOnUnmeteredOnly(value: Boolean) { syncOnUnmeteredOnly.value = value; prefs.edit().putBoolean("sync_unmetered_only", value).apply() }
+    fun setOtpFromNotifications(value: Boolean) { otpFromNotifications.value = value; prefs.edit().putBoolean("otp_notifications", value).apply() }
+    fun setOtpAutoCopy(value: Boolean) { otpAutoCopy.value = value; prefs.edit().putBoolean("otp_auto_copy", value).apply() }
+    fun setAppPalette(value: String) { appPalette.value = value; prefs.edit().putString("app_palette", value).apply() }
     fun setKeyboardVaultBar(value: Boolean) { keyboardVaultBar.value = value; prefs.edit().putBoolean("keyboard_vault_bar", value).apply() }
 }

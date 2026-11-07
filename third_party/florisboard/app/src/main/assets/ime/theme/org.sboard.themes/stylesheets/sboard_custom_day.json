@@ -1,26 +1,26 @@
 {
   "$schema": "https://schemas.florisboard.org/snygg/v2/stylesheet",
   "@defines": {
-    "--primary": "#3D5AFE",
-    "--primary-variant": "#2A3FBF",
-    "--secondary": "#A5B6B0",
-    "--secondary-variant": "#758A83",
-    "--background": "#000000",
-    "--background-variant": "#05050A",
-    "--surface": "#000000",
-    "--surface-variant": "#141428",
-    "--popup-surface": "#141428",
-    "--focused-popup-surface": "#484850",
+    "--primary": "#80612D",
+    "--primary-variant": "#654A20",
+    "--secondary": "#667D79",
+    "--secondary-variant": "#405954",
+    "--background": "#F3F0E9",
+    "--background-variant": "#E8E4DA",
+    "--surface": "#FFFDF8",
+    "--surface-variant": "#EAE6DD",
+    "--popup-surface": "#F4F0E7",
+    "--focused-popup-surface": "#D8D0C1",
     "--drag-marker": "rgb(255,0,0)",
-    "--spacer-color": "rgba(255, 255, 255, 0.25)",
-    "--one-hand-background": "#000000",
-    "--one-hand-foreground": "#F1ECE2",
-    "--incognito-icon-color": "#ffffff11",
-    "--on-primary": "#20190E",
-    "--on-background-disabled": "#dcdcdc48",
-    "--on-background": "#F1ECE2",
-    "--on-surface": "#FFFFFF",
-    "--on-surface-variant": "#B8B2A8",
+    "--spacer-color": "rgba(0 ,0, 0, 0.25)",
+    "--one-hand-background": "#E7E1D5",
+    "--one-hand-foreground": "#25221D",
+    "--incognito-icon-color": "#00000011",
+    "--on-primary": "#FFFFFF",
+    "--on-background": "#1B1916",
+    "--on-background-disabled": "rgb(175,175,175)",
+    "--on-surface": "#1B1916",
+    "--on-surface-variant": "#625E56",
     "--shape": "rounded-corner(10dp, 10dp, 10dp, 10dp)",
     "--shape-variant": "rounded-corner(14dp, 14dp, 14dp, 14dp)",
     "--shape-chip": "rounded-corner(50%, 50%, 50%, 50%)"
@@ -34,10 +34,8 @@
     "foreground": "var(--on-surface)",
     "font-size": "22sp",
     "shape": "var(--shape)",
-    "shadow-elevation": "0dp",
-    "text-max-lines": "1",
-    "border-color": "#3D5AFE",
-    "border-width": "1dp"
+    "shadow-elevation": "2dp",
+    "text-max-lines": "1"
   },
   "key:pressed": {
     "background": "var(--surface-variant)",
@@ -115,10 +113,6 @@
     "background": "transparent",
     "foreground": "var(--on-background)",
     "shape": "var(--shape)"
-  },
-  "smartbar-action-key:pressed": {
-    "background": "var(--surface)",
-    "foreground": "var(--on-surface)"
   },
   "smartbar-action-key:disabled": {
     "foreground": "var(--on-background-disabled)"

@@ -2,4 +2,5 @@
 <resources>
     <string name="app_name">sBoard</string>
     <string name="autofill_service_name">sBoard Автозаполнение</string>
+    <string name="otp_listener_name">sBoard: коды подтверждения</string>
 </resources>

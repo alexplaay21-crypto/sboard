@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sboard.app.core.i18n.tr
+import androidx.lifecycle.repeatOnLifecycle
 import com.sboard.app.core.security.SensitiveClipboard
 import com.sboard.app.data.ItemType
 import com.sboard.app.feature.otp.OtpAuthUri
@@ -43,6 +44,7 @@ fun ToolsScreen(nav: Navigator) {
     }
     ScreenList(Modifier.statusBarsPadding()) {
         item { ScreenHeader(tr("Инструменты"), tr("Полезные функции sBoard")) }
+        item { OtpCodesCard() }
         item { SectionTitle(tr("Безопасность")) }
         item {
             SBCard(padding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)) {
@@ -156,54 +158,70 @@ fun StrengthScreen(nav: Navigator) {
 @Composable
 fun TranslatorScreen(nav: Navigator) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var from by remember { mutableStateOf("ru") }
+    var engine by remember { mutableStateOf(Translator.engine(context)) }
+    var deeplKey by remember { mutableStateOf(Translator.deeplKey(context)) }
+    var from by remember { mutableStateOf(Translator.AUTO) }
     var to by remember { mutableStateOf("en") }
     var input by remember { mutableStateOf("") }
     var output by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var pickFor by remember { mutableStateOf<String?>(null) }
-    val names = Translator.languages.associate { it.code to it.name }
+    val names = mapOf(Translator.AUTO to tr("Определить язык")) + Translator.languages.associate { it.code to it.name }
+    // Live translation while typing (debounced).
+    LaunchedEffect(input, from, to, engine) {
+        if (input.isBlank()) { output = ""; error = null; return@LaunchedEffect }
+        kotlinx.coroutines.delay(500)
+        busy = true; error = null
+        try { output = Translator.translate(context, input, from, to) } catch (e: Exception) {
+            error = if (e is java.net.UnknownHostException) tr("Нет подключения к интернету") else e.message ?: tr("Не удалось перевести")
+        }
+        busy = false
+    }
     Column(Modifier.fillMaxSize().imePadding()) {
         TopBar(tr("Переводчик"), { nav.pop() })
         ScreenList(bottomPadding = 40.dp) {
-            item { Banner(tr("Онлайн-функция: текст отправляется в сервис MyMemory только при нажатии «Перевести». Не переводите пароли и личные данные."), Tone.INFO, Icons.Rounded.Public) }
+            item {
+                SegmentedControl(listOf(Translator.ENGINE_GOOGLE to "Google", Translator.ENGINE_DEEPL to "DeepL", Translator.ENGINE_MYMEMORY to "MyMemory"), engine, {
+                    engine = it; Translator.setEngine(context, it)
+                })
+            }
+            if (engine == Translator.ENGINE_DEEPL) item {
+                SBCard {
+                    SBTextField(deeplKey, { deeplKey = it; Translator.setDeeplKey(context, it) }, tr("Ключ DeepL API"), password = true)
+                    Text(tr("Бесплатный ключ (500 000 символов в месяц) выдаётся на deepl.com/pro-api. Ключ хранится только на этом устройстве."),
+                        style = MaterialTheme.typography.bodySmall, color = palette.textMuted)
+                }
+            }
             item {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SecondaryButton(names[from] ?: from, { pickFor = "from" }, Modifier.weight(1f))
-                    IconButton(onClick = { val t = from; from = to; to = t; input = output.ifEmpty { input }; output = "" }) { Icon(Icons.Rounded.SwapHoriz, tr("Поменять"), tint = palette.accent) }
+                    IconButton(onClick = { if (from != Translator.AUTO) { val t = from; from = to; to = t; input = output.ifEmpty { input } } }) {
+                        Icon(Icons.Rounded.SwapHoriz, tr("Поменять"), tint = palette.accent)
+                    }
                     SecondaryButton(names[to] ?: to, { pickFor = "to" }, Modifier.weight(1f))
                 }
             }
-            item { SBTextField(input, { if (it.length <= Translator.MAX_CHARS) input = it; error = null }, tr("Текст"), singleLine = false, minLines = 4, supporting = "${input.length}/${Translator.MAX_CHARS}") }
-            item {
-                PrimaryButton(tr("Перевести"), {
-                    scope.launch {
-                        busy = true; error = null
-                        try { output = Translator.translate(input, from, to) } catch (e: Exception) {
-                            error = if (e is java.net.UnknownHostException) tr("Нет подключения к интернету") else e.message ?: tr("Не удалось перевести")
-                        }
-                        busy = false
-                    }
-                }, enabled = input.isNotBlank(), loading = busy, icon = Icons.Rounded.Translate)
-            }
+            item { SBTextField(input, { if (it.length <= Translator.MAX_CHARS) input = it }, tr("Текст"), singleLine = false, minLines = 4, supporting = "${input.length}/${Translator.MAX_CHARS}") }
             item { AnimatedBanner(error, Tone.DANGER) }
+            if (busy) item { LinearProgressIndicator(Modifier.fillMaxWidth(), color = palette.accent) }
             if (output.isNotEmpty()) item {
                 SBCard {
                     Text(output, style = MaterialTheme.typography.bodyLarge, color = palette.text)
                     SecondaryButton(tr("Скопировать"), { SensitiveClipboard.copy(context, output, false) }, icon = Icons.Rounded.ContentCopy)
                 }
             }
+            item { Text(tr("Онлайн-функция: текст отправляется выбранному сервису перевода. Не переводите пароли и личные данные. В клавиатуре переводчик открывается кнопкой на панели инструментов."),
+                style = MaterialTheme.typography.bodySmall, color = palette.textFaint) }
         }
     }
     pickFor?.let { target ->
         AlertDialog(onDismissRequest = { pickFor = null }, containerColor = palette.surface, title = { Text(tr("Язык")) },
             text = {
                 androidx.compose.foundation.lazy.LazyColumn {
-                    items(Translator.languages) { lang ->
-                        Text(lang.name, Modifier.fillMaxWidth().clickable { if (target == "from") from = lang.code else to = lang.code; pickFor = null }.padding(vertical = 12.dp),
-                            color = if ((target == "from" && from == lang.code) || (target == "to" && to == lang.code)) palette.accent else palette.text)
+                    items(names.entries.filter { target == "from" || it.key != Translator.AUTO }.toList()) { (code, label) ->
+                        Text(label, Modifier.fillMaxWidth().clickable { if (target == "from") from = code else to = code; pickFor = null }.padding(vertical = 12.dp),
+                            color = if ((target == "from" && from == code) || (target == "to" && to == code)) palette.accent else palette.text)
                     }
                 }
             }, confirmButton = {})
@@ -257,3 +275,34 @@ private fun readClipboard(context: Context): String? = runCatching {
     val sensitive = clip.description.extras?.getBoolean("android.content.extra.IS_SENSITIVE") == true
     if (sensitive) "••••••••" else clip.getItemAt(0)?.coerceToText(context)?.toString().orEmpty()
 }.getOrNull()
+
+
+/** Automatic one-time codes from SMS, messengers and mail notifications. */
+@Composable
+private fun OtpCodesCard() {
+    val context = LocalContext.current
+    var access by remember { mutableStateOf(com.sboard.app.feature.otpinbox.OtpInbox.hasAccess(context)) }
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+            access = com.sboard.app.feature.otpinbox.OtpInbox.hasAccess(context)
+        }
+    }
+    val latest by com.sboard.app.feature.otpinbox.OtpInbox.latest.collectAsState()
+    val now = rememberNow()
+    SBCard {
+        ListRow(tr("Коды подтверждения"), tr("Автоматически из SMS, WhatsApp, Telegram, Gmail и других приложений"), icon = Icons.Rounded.Sms, trailing = null)
+        if (!access) {
+            Banner(tr("Разрешите sBoard читать уведомления — так коды будут копироваться и подставляться автоматически. Текст сообщений не сохраняется."), Tone.INFO)
+            PrimaryButton(tr("Разрешить доступ к уведомлениям"), { com.sboard.app.feature.otpinbox.OtpInbox.openAccessSettings(context) }, icon = Icons.Rounded.NotificationsActive)
+        } else {
+            com.sboard.app.core.settings.AppSettings.let { s ->
+                SwitchRow(tr("Находить коды в уведомлениях"), null, s.otpFromNotifications.value, Icons.Rounded.Pin) { s.setOtpFromNotifications(it) }
+                SwitchRow(tr("Копировать код автоматически"), tr("Код сразу попадает в буфер — вставьте его кнопкой на клавиатуре"), s.otpAutoCopy.value, Icons.Rounded.ContentCopy) { s.setOtpAutoCopy(it) }
+            }
+            val code = latest?.takeIf { now - it.receivedAt < 10 * 60_000 }
+            if (code != null) FieldRow(tr("Последний код · {0}", code.sourceApp), code.code, monospace = true)
+            else Text(tr("Новые коды появятся здесь, в автозаполнении и в буфере обмена."), style = MaterialTheme.typography.bodySmall, color = palette.textMuted)
+        }
+    }
+}

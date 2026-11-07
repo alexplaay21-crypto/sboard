@@ -79,7 +79,8 @@ private fun AppRoot() {
     }
     val navigator = remember { Navigator() }
 
-    Box(Modifier.fillMaxSize().background(palette.background)) {
+    val top = if (palette.isDark) androidx.compose.ui.graphics.lerp(palette.background, palette.accent, 0.10f) else androidx.compose.ui.graphics.lerp(palette.background, palette.accent, 0.06f)
+    Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(top, palette.background, palette.background)))) {
         when {
             startupError != null -> Box(Modifier.fillMaxSize().systemBarsPadding().padding(24.dp), contentAlignment = Alignment.Center) {
                 com.sboard.app.ui.components.Banner(com.sboard.app.core.i18n.tr("Не удалось открыть хранилище: {0}", startupError), com.sboard.app.ui.components.Tone.DANGER)
@@ -122,7 +123,7 @@ private fun MainShell(nav: Navigator) {
         ) { state ->
             when (state) {
                 Tab.HOME -> HomeScreen(nav)
-                Tab.KEYBOARD -> KeyboardScreen()
+                Tab.KEYBOARD -> KeyboardScreen(nav)
                 Tab.VAULT -> VaultScreen(nav)
                 Tab.TOOLS -> ToolsScreen(nav)
                 Tab.PROFILE -> ProfileScreen(nav)
@@ -140,6 +141,7 @@ private fun MainShell(nav: Navigator) {
                 Route.Appearance -> AppearanceScreen(nav)
                 Route.About -> AboutScreen(nav)
                 Route.PasswordHealth -> PasswordHealthScreen(nav)
+                Route.KeyboardTheme -> KeyboardThemeEditor(nav)
             }
         }
         AnimatedVisibility(

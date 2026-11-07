@@ -106,17 +106,11 @@ object SBoardKeyboardSettings {
         prefs.keyboard.keySpacingVertical.set((value * 2.5f).coerceIn(0f, 12f))
     }
 
-    /** Theme ids bundled in assets/ime/theme/org.sboard.themes. */
-    val themes: List<Pair<String, String>> = listOf(
-        "sboard_dark" to "Graphite", "sboard_light" to "Light", "sboard_amoled" to "AMOLED",
-        "sboard_outline_blue" to "Neon Outline", "sboard_outline_gold" to "Gold Outline", "sboard_ocean" to "Ocean",
-        "sboard_forest" to "Forest", "sboard_rose" to "Rose", "sboard_minimal_light" to "Minimal Light",
-        "sboard_minimal_dark" to "Minimal Dark", "sboard_contrast" to "High Contrast",
-    )
-    fun dayTheme(): String = prefs.theme.dayThemeId.get().componentId
-    fun nightTheme(): String = prefs.theme.nightThemeId.get().componentId
-    suspend fun setDayTheme(id: String) = prefs.theme.dayThemeId.set(ExtensionComponentName("org.sboard.themes", id))
-    suspend fun setNightTheme(id: String) = prefs.theme.nightThemeId.set(ExtensionComponentName("org.sboard.themes", id))
+    /** Points both day and night keyboard themes at the editable custom themes. */
+    suspend fun useCustomThemes() {
+        prefs.theme.dayThemeId.set(ExtensionComponentName(SBoardThemeStore.EXTENSION, SBoardThemeStore.CUSTOM_DAY))
+        prefs.theme.nightThemeId.set(ExtensionComponentName(SBoardThemeStore.EXTENSION, SBoardThemeStore.CUSTOM_NIGHT))
+    }
 
     // ---- Languages ----------------------------------------------------------------------------
 
@@ -158,6 +152,10 @@ object SBoardKeyboardSettings {
      */
     suspend fun migrateToSamsungStyle(context: Context) {
         val marker = context.getSharedPreferences("sboard_keyboard_setup", Context.MODE_PRIVATE)
+        if (!marker.getBoolean("custom_theme_v1", false)) {
+            useCustomThemes() // removed preset themes are replaced by the editable theme
+            marker.edit().putBoolean("custom_theme_v1", true).apply()
+        }
         if (marker.getBoolean("samsung_style_v1", false)) return
         val raw = prefs.localization.subtypes.get()
         if (raw.isNotBlank() && raw != "[]") {

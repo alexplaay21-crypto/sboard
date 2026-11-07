@@ -85,8 +85,9 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
                         Json.decodeFromString(wordDataSerializer, rawData)
                     }
                     "ru" -> {
-                        // This ranked 10k list is licensed under CC BY 2.5; see THIRD_PARTY_NOTICES.
-                        RankedWordList.parse(appContext.assets.readText("ime/dict/russian_10000.txt"))
+                        // Modified for sBoard: ~50k ranked forms (FrequencyWords CC BY-SA 4.0 + the CC BY 2.5
+                        // 10k list); see THIRD_PARTY_NOTICES. More word forms = better swipe and suggestions.
+                        RankedWordList.parse(appContext.assets.readText("ime/dict/russian_words.txt"))
                     }
                     else -> emptyMap()
                 }
@@ -138,7 +139,7 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
         if (query.isBlank()) return emptyList()
         return wordData.withLock { dictionaries ->
             val dictionary = dictionaries[language] ?: return@withLock emptyList()
-            val maxFrequency = if (language == "ru") 10_000 else 255
+            val maxFrequency = if (language == "ru") RankedWordList.MAX_RANK else 255
             LatinWordEngine.suggest(query, dictionary, maxCandidateCount)
                 .filter { allowPossiblyOffensive || it.word !in BLOCKED_WORDS }
                 .map { match ->
@@ -174,7 +175,7 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
         return wordData.withLock {
             val language = subtype.primaryLocale.language
             val dictionary = it[language] ?: return@withLock 0.0
-            val maxFrequency = if (language == "ru") 10_000 else 255
+            val maxFrequency = if (language == "ru") RankedWordList.MAX_RANK else 255
             dictionary[word.lowercase(Locale.ROOT)]?.toDouble()?.div(maxFrequency.toDouble()) ?: 0.0
         }
     }

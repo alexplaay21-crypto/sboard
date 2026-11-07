@@ -33,11 +33,14 @@ object FieldParser {
         val fields = LinkedHashMap<FieldKind, MutableList<AutofillId>>()
         val values = HashMap<FieldKind, String>()
         var webDomain: String? = null
+        var lastPlainTextBeforePassword: AutofillId? = null
         fun visit(node: AssistStructure.ViewNode) {
             if (webDomain == null) node.webDomain?.takeIf { it.isNotBlank() }?.let { webDomain = it }
             val id = node.autofillId
             if (id != null && node.visibility == View.VISIBLE && node.autofillType == View.AUTOFILL_TYPE_TEXT) {
-                classify(node)?.let { kind ->
+                val kind0 = classify(node)
+                if (kind0 == null && !fields.containsKey(FieldKind.PASSWORD) && isPlainText(node)) lastPlainTextBeforePassword = id
+                kind0?.let { kind ->
                     fields.getOrPut(kind) { mutableListOf() }.add(id)
                     if (captureValues) {
                         val text = node.autofillValue?.takeIf { it.isText }?.textValue?.toString()
@@ -48,7 +51,12 @@ object FieldParser {
             for (i in 0 until node.childCount) visit(node.getChildAt(i))
         }
         for (i in 0 until structure.windowNodeCount) visit(structure.getWindowNodeAt(i).rootViewNode)
-        // A lone "username-like" text field next to a password is the username even without hints.
+        // A plain text field right before the password is the username even without hints.
+        val hasPassword = fields.containsKey(FieldKind.PASSWORD)
+        val hasUser = fields.containsKey(FieldKind.USERNAME) || fields.containsKey(FieldKind.EMAIL) || fields.containsKey(FieldKind.PHONE)
+        if (hasPassword && !hasUser && lastPlainTextBeforePassword != null) {
+            fields[FieldKind.USERNAME] = mutableListOf(lastPlainTextBeforePassword!!)
+        }
         return ParsedForm(fields, webDomain, structure.activityComponent?.packageName.orEmpty(), values)
     }
 
@@ -92,6 +100,15 @@ object FieldParser {
         FieldKind.COUNTRY to listOf("country", "страна"),
     )
 
+    private fun isPlainText(node: AssistStructure.ViewNode): Boolean {
+        val html = node.htmlInfo
+        if (html != null) {
+            val type = html.attributes?.firstOrNull { it.first.equals("type", true) }?.second?.lowercase()
+            return html.tag.equals("input", true) && (type == null || type == "text")
+        }
+        return (node.inputType and InputType.TYPE_MASK_CLASS) == InputType.TYPE_CLASS_TEXT
+    }
+
     internal fun classify(node: AssistStructure.ViewNode): FieldKind? {
         node.autofillHints?.forEach { hint -> hintMap[hint.lowercase(Locale.ROOT).replace(" ", "")]?.let { return it } }
         val html = node.htmlInfo
@@ -130,6 +147,10 @@ object FieldParser {
                 variation == InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS)) return FieldKind.EMAIL
         if (cls == InputType.TYPE_CLASS_PHONE) return FieldKind.PHONE
         if (text.isBlank()) return null
+        // Custom password views that do not declare a password input type.
+        val passwordWords = listOf("password", "passwd", "pwd", "пароль", "passcode", "парол")
+        if (passwordWords.any { text.contains(it) } && listOf("forgot", "забыли", "reset", "восстанов", "confirm").none { text.contains(it) } &&
+            cls == InputType.TYPE_CLASS_TEXT) return FieldKind.PASSWORD
         for ((kind, words) in keywordRules) {
             if (kind == FieldKind.PASSWORD || kind == FieldKind.NEW_PASSWORD) continue // only on real password inputs
             if (words.any { word -> text.contains(word) }) return kind

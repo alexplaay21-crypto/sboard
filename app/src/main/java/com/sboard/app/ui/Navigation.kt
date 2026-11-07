@@ -24,6 +24,7 @@ sealed interface Route {
     data object Appearance : Route
     data object About : Route
     data object PasswordHealth : Route
+    data object KeyboardTheme : Route
 }
 
 /** Small state-based navigator: a selected tab plus a back stack of detail routes. */

@@ -65,7 +65,11 @@ class AutofillActivity : SecureActivity() {
                             UnlockPanel(title = tr("Автозаполнение sBoard"), subtitle = parsed.webDomain ?: appLabel(parsed.packageName),
                                 onUnlocked = { justUnlocked = true })
                         }
-                    } else Picker(parsed, if (mode == MODE_CONFIRM) targetId else null, justUnlocked)
+                    } else when (mode) {
+                        MODE_CONFIRM -> AutoConfirm(parsed, targetId, justUnlocked)
+                        MODE_UNLOCK_LIST -> UnlockedList(parsed, justUnlocked)
+                        else -> Picker(parsed, null, justUnlocked)
+                    }
                 }
             }
         }
@@ -74,6 +78,48 @@ class AutofillActivity : SecureActivity() {
     private fun appLabel(pkg: String): String = runCatching {
         packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
     }.getOrDefault(pkg)
+
+    /** Tap on a suggestion: confirm with biometrics right away, no intermediate screen. */
+    @Composable
+    private fun AutoConfirm(form: ParsedForm, targetId: String?, justUnlocked: Boolean) {
+        var error by remember { mutableStateOf<String?>(null) }
+        LaunchedEffect(targetId) {
+            val item = targetId?.let { VaultRepository.get(this@AutofillActivity).get(it) }
+            if (item == null) { setResult(Activity.RESULT_CANCELED); finish(); return@LaunchedEffect }
+            error = fill(item, form, justUnlocked, link = false)
+            if (error == null && !isFinishing) { setResult(Activity.RESULT_CANCELED); finish() }
+        }
+        Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                error?.let { Banner(it, Tone.DANGER) }
+                if (error != null) SecondaryButton(tr("Отмена"), { setResult(Activity.RESULT_CANCELED); finish() })
+            }
+        }
+    }
+
+    /** After unlocking from the field: hand the matching logins back as one-tap suggestions. */
+    @Composable
+    private fun UnlockedList(form: ParsedForm, justUnlocked: Boolean) {
+        var showPicker by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            val items = VaultRepository.get(this@AutofillActivity).snapshot()
+            val fillable = items.filter { AutofillDatasets.values(it, form).isNotEmpty() }
+            val matches = AutofillDatasets.matching(fillable, form)
+            if (matches.isEmpty()) { showPicker = true; return@LaunchedEffect }
+            val response = android.service.autofill.FillResponse.Builder()
+            matches.forEach { item -> AutofillDatasets.filledDataset(this@AutofillActivity, item, form)?.let(response::addDataset) }
+            val pickPres = AutofillDatasets.presentation(this@AutofillActivity, tr("Выбрать в sBoard"), form.webDomain, com.sboard.app.R.drawable.ic_autofill_lock)
+            @Suppress("DEPRECATION")
+            response.addDataset(android.service.autofill.Dataset.Builder(pickPres).apply {
+                form.allIds.forEach { setValue(it, null, pickPres) }
+                setAuthentication(intentSender(this@AutofillActivity, MODE_PICK, null, 997))
+            }.build())
+            matches.firstOrNull()?.let { LastFill.remember(form.webDomain ?: form.packageName, it.id) }
+            setResult(Activity.RESULT_OK, Intent().putExtra(AutofillManager.EXTRA_AUTHENTICATION_RESULT, response.build()))
+            finish()
+        }
+        if (showPicker) Picker(form, null, justUnlocked)
+    }
 
     @Composable
     private fun Picker(form: ParsedForm, targetId: String?, justUnlocked: Boolean) {
@@ -131,6 +177,7 @@ class AutofillActivity : SecureActivity() {
             if (updated != login) VaultRepository.get(this).save(item.id, item.payload.copy(login = updated), snapshot = false)
         }
         val dataset = AutofillDatasets.filledDataset(this, item, form) ?: return tr("Для этой формы нет подходящих полей")
+        LastFill.remember(form.webDomain ?: form.packageName, item.id)
         setResult(Activity.RESULT_OK, Intent().putExtra(AutofillManager.EXTRA_AUTHENTICATION_RESULT, dataset))
         finish()
         return null
@@ -142,6 +189,7 @@ class AutofillActivity : SecureActivity() {
         const val MODE_UNLOCK_PICK = "unlock_pick"
         const val MODE_PICK = "pick"
         const val MODE_CONFIRM = "confirm"
+        const val MODE_UNLOCK_LIST = "unlock_list"
 
         fun intent(context: Context, mode: String, itemId: String?): Intent =
             Intent(context, AutofillActivity::class.java).putExtra(EXTRA_MODE, mode).apply { if (itemId != null) putExtra(EXTRA_ITEM_ID, itemId) }

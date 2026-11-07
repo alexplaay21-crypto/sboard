@@ -44,26 +44,52 @@ class SBoardAutofillService : AutofillService() {
             val session = VaultSessionProvider.session
             var datasets = 0
             val inlineRequest = if (Build.VERSION.SDK_INT >= 30) request.inlineSuggestionsRequest else null
-            if (session.isUnlocked) {
-                val items = kotlinx.coroutines.withTimeoutOrNull(2500) { VaultRepository.get(this@SBoardAutofillService).snapshot() }.orEmpty()
-                AutofillDatasets.matching(items, form).forEachIndexed { index, item ->
-                    AutofillDatasets.lockedDataset(this, item, form, 1000 + index, inlineRequest, datasets)?.let { response.addDataset(it); datasets++ }
+            // A fresh code from SMS / messengers / mail is offered first for one-time-code fields.
+            com.sboard.app.feature.otpinbox.OtpInbox.current()?.let { otp ->
+                val otpIds = form.fields[FieldKind.OTP].orEmpty()
+                if (otpIds.isNotEmpty()) {
+                    val title = tr("Код {0}", otp.code)
+                    val pres = AutofillDatasets.presentation(this, title, tr("из {0}", otp.sourceApp), R.drawable.ic_autofill_key)
+                    response.addDataset(Dataset.Builder(pres).apply {
+                        otpIds.forEach { setValue(it, android.view.autofill.AutofillValue.forText(otp.code), pres) }
+                        if (Build.VERSION.SDK_INT >= 30) AutofillDatasets.inlinePresentation(this@SBoardAutofillService, inlineRequest, datasets, title, otp.sourceApp)?.let { setInlinePresentation(it) }
+                    }.build())
+                    datasets++
                 }
             }
-            // Always offer an entry to unlock / search the Vault (also links the site or app to a login).
-            val pickIntent = AutofillActivity.intent(this, if (session.isUnlocked) AutofillActivity.MODE_PICK else AutofillActivity.MODE_UNLOCK_PICK, null)
-            val pickPresentation = AutofillDatasets.presentation(this,
-                if (session.isUnlocked) tr("Выбрать в sBoard") else tr("Разблокировать sBoard"),
-                form.webDomain ?: tr("Хранилище sBoard"), R.drawable.ic_autofill_lock)
-            response.addDataset(Dataset.Builder(pickPresentation).apply {
-                form.allIds.forEach { setValue(it, null, pickPresentation) }
-                setAuthentication(AutofillDatasets.pendingIntentSender(this@SBoardAutofillService, pickIntent, 999))
+            if (!session.isUnlocked && datasets == 0) {
+                // Locked: one "Unlock sBoard" entry for the whole form. After unlocking, the activity
+                // returns the matching logins as ready-to-tap suggestions (no second step).
+                val pres = AutofillDatasets.presentation(this, tr("Разблокировать sBoard"), form.webDomain ?: tr("Хранилище sBoard"), R.drawable.ic_autofill_lock)
+                val sender = AutofillDatasets.pendingIntentSender(this, AutofillActivity.intent(this, AutofillActivity.MODE_UNLOCK_LIST, null), 998)
                 if (Build.VERSION.SDK_INT >= 30) {
-                    AutofillDatasets.inlinePresentation(this@SBoardAutofillService, inlineRequest, datasets,
-                        if (session.isUnlocked) tr("Выбрать в sBoard") else tr("Разблокировать sBoard"), null)?.let { setInlinePresentation(it) }
+                    val inline = AutofillDatasets.inlinePresentation(this, inlineRequest, 0, tr("Разблокировать sBoard"), null)
+                    @Suppress("DEPRECATION")
+                    if (inline != null) response.setAuthentication(form.allIds.toTypedArray(), sender, pres, inline)
+                    else response.setAuthentication(form.allIds.toTypedArray(), sender, pres)
+                } else response.setAuthentication(form.allIds.toTypedArray(), sender, pres)
+                datasets++
+            } else {
+                if (session.isUnlocked) {
+                    val items = kotlinx.coroutines.withTimeoutOrNull(2500) { VaultRepository.get(this@SBoardAutofillService).snapshot() }.orEmpty()
+                    val confirm = AppSettings.biometricForSensitive.value
+                    AutofillDatasets.matching(items, form).forEachIndexed { index, item ->
+                        val ds = if (confirm) AutofillDatasets.lockedDataset(this, item, form, 1000 + index, inlineRequest, datasets)
+                            else AutofillDatasets.filledDataset(this, item, form, inlineRequest, datasets)
+                        ds?.let { response.addDataset(it); datasets++ }
+                    }
                 }
-            }.build())
-            datasets++
+                // Entry to search the whole Vault (also links this site/app to the chosen login).
+                val pickIntent = AutofillActivity.intent(this, if (session.isUnlocked) AutofillActivity.MODE_PICK else AutofillActivity.MODE_UNLOCK_PICK, null)
+                val pickTitle = if (session.isUnlocked) tr("Выбрать в sBoard") else tr("Разблокировать sBoard")
+                val pickPresentation = AutofillDatasets.presentation(this, pickTitle, form.webDomain ?: tr("Хранилище sBoard"), R.drawable.ic_autofill_lock)
+                response.addDataset(Dataset.Builder(pickPresentation).apply {
+                    form.allIds.forEach { setValue(it, null, pickPresentation) }
+                    setAuthentication(AutofillDatasets.pendingIntentSender(this@SBoardAutofillService, pickIntent, 999))
+                    if (Build.VERSION.SDK_INT >= 30) AutofillDatasets.inlinePresentation(this@SBoardAutofillService, inlineRequest, datasets, pickTitle, null)?.let { setInlinePresentation(it) }
+                }.build())
+                datasets++
+            }
             if (form.passwordIds.isNotEmpty()) {
                 val saveType = SaveInfo.SAVE_DATA_TYPE_PASSWORD or (if (form.usernameIds.isNotEmpty()) SaveInfo.SAVE_DATA_TYPE_USERNAME else 0)
                 response.setSaveInfo(SaveInfo.Builder(saveType, form.passwordIds.toTypedArray()).apply {

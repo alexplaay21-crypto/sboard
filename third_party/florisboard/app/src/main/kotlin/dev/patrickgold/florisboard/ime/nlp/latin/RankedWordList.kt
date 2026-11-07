@@ -20,6 +20,8 @@ import java.util.Locale
 
 /** Converts an ordered word list into the compact scores expected by the Latin provider. */
 internal object RankedWordList {
+    const val MAX_RANK = 60_000
+
     fun parse(text: String): Map<String, Int> {
         val words = linkedMapOf<String, Int>()
         var rank = 0
@@ -27,7 +29,7 @@ internal object RankedWordList {
             val word = rawWord.trim().lowercase(Locale.ROOT)
             if (word.length !in 2..40 || word.any { !it.isLetter() }) return@forEach
             if (word !in words) {
-                words[word] = (10_000 - rank).coerceAtLeast(1)
+                words[word] = (MAX_RANK - rank).coerceAtLeast(1)
                 rank++
             }
         }

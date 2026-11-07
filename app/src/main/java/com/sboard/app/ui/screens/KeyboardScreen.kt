@@ -1,13 +1,6 @@
 package com.sboard.app.ui.screens
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.*
 import androidx.compose.material.icons.rounded.*
@@ -15,10 +8,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -31,46 +21,6 @@ import com.sboard.app.ui.theme.palette
 import kotlinx.coroutines.launch
 import org.sboard.keyboard.SBoardKeyboardSettings as K
 
-/** Preview colours for the bundled keyboard themes: background, key, accent. */
-private val themeSwatches = mapOf(
-    "sboard_dark" to Triple(0xFF0C0C0E, 0xFF222226, 0xFFD7B978), "sboard_light" to Triple(0xFFF1F0EC, 0xFFFFFFFF, 0xFFA58A27),
-    "sboard_amoled" to Triple(0xFF000000, 0xFF141414, 0xFFD7B978), "sboard_outline_blue" to Triple(0xFF000000, 0xFF000000, 0xFF3D5AFE),
-    "sboard_outline_gold" to Triple(0xFF000000, 0xFF050505, 0xFFD5B94B), "sboard_ocean" to Triple(0xFF0B1620, 0xFF16283A, 0xFF4FC3F7),
-    "sboard_forest" to Triple(0xFF0E1610, 0xFF1B2B1F, 0xFF81C784), "sboard_rose" to Triple(0xFFFCEFF3, 0xFFFFFFFF, 0xFFE57399),
-    "sboard_minimal_light" to Triple(0xFFF1F0EC, 0xFFF1F0EC, 0xFFA58A27), "sboard_minimal_dark" to Triple(0xFF0C0C0E, 0xFF0C0C0E, 0xFFD7B978),
-    "sboard_contrast" to Triple(0xFF000000, 0xFF000000, 0xFFFFFF00),
-)
-
-@Composable
-private fun ThemePicker(title: String, selected: String, onSelect: (String) -> Unit) {
-    Text(title, style = MaterialTheme.typography.titleSmall, color = palette.text)
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        items(K.themes, key = { it.first }) { (id, label) ->
-            val (bg, key, accent) = themeSwatches[id] ?: Triple(0xFF222222, 0xFF444444, 0xFFD5B94B)
-            val active = id == selected
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(76.dp).clickable { onSelect(id) }) {
-                Box(Modifier.size(width = 72.dp, height = 50.dp).clip(RoundedCornerShape(12.dp)).background(Color(bg))
-                    .border(BorderStroke(if (active) 2.dp else 1.dp, if (active) palette.accent else palette.outline), RoundedCornerShape(12.dp))
-                    .padding(6.dp)) {
-                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        repeat(3) { row ->
-                            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                                repeat(4) { col ->
-                                    val isAccent = row == 2 && col == 3
-                                    Box(Modifier.size(width = 12.dp, height = 8.dp).clip(RoundedCornerShape(2.dp))
-                                        .background(if (isAccent) Color(accent) else Color(key))
-                                        .border(BorderStroke(0.5.dp, if (id.contains("outline") || id == "sboard_contrast") Color(accent) else Color.Transparent), RoundedCornerShape(2.dp)))
-                                }
-                            }
-                        }
-                    }
-                }
-                Text(label, style = MaterialTheme.typography.labelSmall, color = if (active) palette.accent else palette.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-        }
-    }
-}
-
 @Composable
 private fun SliderRow(title: String, value: Float, range: ClosedFloatingPointRange<Float>, label: (Float) -> String, onFinished: (Float) -> Unit) {
     var v by remember(value) { mutableFloatStateOf(value) }
@@ -80,7 +30,7 @@ private fun SliderRow(title: String, value: Float, range: ClosedFloatingPointRan
 }
 
 @Composable
-fun KeyboardScreen() {
+fun KeyboardScreen(nav: com.sboard.app.ui.Navigator) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var enabled by remember { mutableStateOf(false) }
@@ -97,8 +47,6 @@ fun KeyboardScreen() {
     }
     fun <T> pref(get: () -> T, default: T) = runCatching(get).getOrDefault(default)
     var themeMode by remember { mutableStateOf(pref(K::theme, "system")) }
-    var dayTheme by remember { mutableStateOf(pref(K::dayTheme, "sboard_light")) }
-    var nightTheme by remember { mutableStateOf(pref(K::nightTheme, "sboard_dark")) }
     var sound by remember { mutableStateOf(pref(K::soundEnabled, true)) }
     var vibration by remember { mutableStateOf(pref(K::vibrationEnabled, true)) }
     var numberRow by remember { mutableStateOf(pref(K::numberRow, true)) }
@@ -156,9 +104,9 @@ fun KeyboardScreen() {
                 SegmentedControl(listOf("system" to tr("Системная"), "light" to tr("Светлая"), "dark" to tr("Тёмная")), themeMode, {
                     themeMode = it; scope.launch { K.setTheme(it) }
                 })
-                if (themeMode != "dark") ThemePicker(tr("Светлая тема"), dayTheme) { dayTheme = it; scope.launch { K.setDayTheme(it) } }
-                if (themeMode != "light") ThemePicker(tr("Тёмная тема"), nightTheme) { nightTheme = it; scope.launch { K.setNightTheme(it) } }
-                SliderRow(tr("Размер шрифта"), pref(K::fontSizePercent, 100).toFloat(), 70f..140f, { "${it.toInt()}%" }) { scope.launch { K.setFontSizePercent(it.toInt()) } }
+                PrimaryButton(tr("Редактор темы"), { nav.push(com.sboard.app.ui.Route.KeyboardTheme) }, icon = Icons.Rounded.Palette)
+                Text(tr("Меняйте цвет фона, клавиш, букв, символов, панели и акцента, форму клавиш и размер букв — отдельно для светлой и тёмной темы."),
+                    style = MaterialTheme.typography.bodySmall, color = palette.textMuted)
                 SliderRow(tr("Расстояние между клавишами"), pref(K::keySpacing, 2f), 0f..6f, { "%.1f".format(it) }) { scope.launch { K.setKeySpacing(it) } }
             }
         }
