@@ -227,9 +227,11 @@ class NlpManager(context: Context) {
             }
             internalSuggestionsGuard.withLock {
                 if (internalSuggestions.first < reqTime) {
+                    // sBoard: words first, emoji after them (emoji appear inline while typing).
                     internalSuggestions = reqTime to buildList {
+                        addAll(suggestions.take(3))
                         addAll(emojiSuggestions)
-                        addAll(suggestions)
+                        addAll(suggestions.drop(3))
                     }
                 }
             }

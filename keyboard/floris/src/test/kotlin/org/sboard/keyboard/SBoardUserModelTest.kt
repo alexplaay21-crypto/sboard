@@ -42,3 +42,22 @@ class SBoardUserModelTest {
         assertEquals(0, SBoardUserModel.count("xx", "sboard"))
     }
 }
+
+class SBoardAutoCorrectRuleTest {
+    @kotlin.test.Test fun secondIdenticalTypoIsKeptAndLearned() {
+        SBoardUserModel.clear()
+        assertTrue(SBoardUserModel.shouldAutoCorrect("xx", "превет"))
+        SBoardUserModel.noteAutoCorrected("xx", "превет")
+        // Typed exactly the same again: the user means it.
+        assertTrue(!SBoardUserModel.shouldAutoCorrect("xx", "превет"))
+        assertTrue(SBoardUserModel.count("xx", "превет") >= 2)
+    }
+
+    @kotlin.test.Test fun neighbourKeySlipsWinOverOtherEdits() {
+        val dict = mapOf("привет" to 50_000, "пример" to 59_000, "hello" to 200, "jello" to 250)
+        // "з" is next to "х"? no — "р"→"в" etc. Use a QWERTY example: "hrllo" (r next to e).
+        assertEquals("hello", dev.patrickgold.florisboard.ime.nlp.latin.LatinWordEngine.correct("hrllo", dict, 3).first().word)
+        assertTrue(dev.patrickgold.florisboard.ime.nlp.latin.LatinWordEngine.isNeighbour('е', 'н'))
+        assertTrue(!dev.patrickgold.florisboard.ime.nlp.latin.LatinWordEngine.isNeighbour('й', 'м'))
+    }
+}

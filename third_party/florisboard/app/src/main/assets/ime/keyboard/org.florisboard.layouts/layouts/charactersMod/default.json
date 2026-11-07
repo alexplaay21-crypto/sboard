@@ -22,8 +22,8 @@
       "type": "system_gui"
     },
     {
-      "code": -233,
-      "label": "voice_input",
+      "code": -227,
+      "label": "language_switch",
       "type": "system_gui"
     },
     {

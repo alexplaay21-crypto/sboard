@@ -43,7 +43,7 @@ fun FloatingNavBar(selected: Tab, onSelect: (Tab) -> Unit) {
     val items = listOf(
         Triple(Tab.HOME, Icons.Rounded.Home, tr("Главная")),
         Triple(Tab.KEYBOARD, Icons.Rounded.Keyboard, tr("Клавиатура")),
-        Triple(Tab.VAULT, Icons.Rounded.Lock, tr("Хранилище")),
+        Triple(Tab.VAULT, Icons.Rounded.Lock, "sPass"),
         Triple(Tab.TOOLS, Icons.Rounded.GridView, tr("Инструменты")),
         Triple(Tab.PROFILE, Icons.Rounded.Person, tr("Профиль")),
     )

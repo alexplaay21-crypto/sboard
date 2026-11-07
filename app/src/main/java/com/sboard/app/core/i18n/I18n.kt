@@ -31,11 +31,14 @@ object SBoardI18n {
     @Volatile private var packLanguage: String? = null
     @Volatile private var initialized = false
     private var filesDir: File? = null
+    private var assets: android.content.res.AssetManager? = null
+    private var bundled: Set<String> = emptySet()
 
     fun initialize(context: Context) {
         if (initialized) return
         val app = context.applicationContext
         filesDir = app.filesDir
+        attachAssets(app)
         mode.value = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, MODE_SYSTEM) ?: MODE_SYSTEM
         initialized = true
         loadPack(effectiveLanguage())
@@ -43,8 +46,14 @@ object SBoardI18n {
 
     fun currentMode(): String = mode.value
 
+    private fun attachAssets(app: Context) {
+        assets = app.assets
+        bundled = runCatching { app.assets.list("i18n").orEmpty().map { it.removeSuffix(".json") }.toSet() }.getOrDefault(emptySet())
+    }
+
     fun setLanguage(context: Context, value: String) {
         filesDir = context.applicationContext.filesDir
+        if (assets == null) attachAssets(context.applicationContext)
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putString(KEY, value).apply()
         mode.value = value
@@ -76,12 +85,17 @@ object SBoardI18n {
 
     private fun packFile(lang: String): File? = filesDir?.let { File(File(it, "i18n"), "$lang.json") }
 
-    fun hasPack(lang: String) = lang == MODE_RU || lang == MODE_EN || packFile(lang)?.exists() == true
+    /** Built into the APK (all translator languages) or downloaded later. */
+    fun hasPack(lang: String) = lang == MODE_RU || lang == MODE_EN || lang in bundled || packFile(lang)?.exists() == true
 
     private fun loadPack(lang: String) {
-        pack = if (lang == MODE_RU || lang == MODE_EN) emptyMap() else runCatching {
-            Json.parseToJsonElement(packFile(lang)!!.readText()).jsonObject.mapValues { it.value.jsonPrimitive.content }
-        }.getOrDefault(emptyMap())
+        fun parse(text: String) = Json.parseToJsonElement(text).jsonObject.mapValues { it.value.jsonPrimitive.content }
+        pack = if (lang == MODE_RU || lang == MODE_EN) emptyMap() else {
+            // Bundled pack first, then strings downloaded later on top (newer interface texts).
+            val builtIn = runCatching { assets?.open("i18n/$lang.json")?.bufferedReader()?.use { parse(it.readText()) } }.getOrNull().orEmpty()
+            val downloaded = runCatching { packFile(lang)?.takeIf { it.exists() }?.let { parse(it.readText()) } }.getOrNull().orEmpty()
+            builtIn + downloaded
+        }
         packLanguage = lang
         packRevision.intValue++
     }

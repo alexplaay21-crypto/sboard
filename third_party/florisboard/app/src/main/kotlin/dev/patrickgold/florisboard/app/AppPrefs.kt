@@ -265,7 +265,7 @@ abstract class FlorisPreferenceModel : PreferenceModel() {
         )
         val suggestionType = enum(
             key = "emoji__suggestion_type",
-            default = EmojiSuggestionType.LEADING_COLON,
+            default = EmojiSuggestionType.INLINE_TEXT, // sBoard: emoji appear while typing words
         )
         val suggestionUpdateHistory = boolean(
             key = "emoji__suggestion_update_history",
@@ -309,15 +309,15 @@ abstract class FlorisPreferenceModel : PreferenceModel() {
         )
         val spaceBarSwipeLeft = enum(
             key = "gestures__space_bar_swipe_left",
-            default = SwipeAction.SWITCH_TO_PREV_SUBTYPE, // sBoard: space swipe/long-press switch the language
+            default = SwipeAction.MOVE_CURSOR_LEFT, // sBoard: drag on the space bar moves the cursor (Samsung)
         )
         val spaceBarSwipeRight = enum(
             key = "gestures__space_bar_swipe_right",
-            default = SwipeAction.SWITCH_TO_NEXT_SUBTYPE, // sBoard: space swipe/long-press switch the language
+            default = SwipeAction.MOVE_CURSOR_RIGHT,
         )
         val spaceBarLongPress = enum(
             key = "gestures__space_bar_long_press",
-            default = SwipeAction.SHOW_SUBTYPE_PICKER, // sBoard: space swipe/long-press switch the language
+            default = SwipeAction.NO_ACTION, // sBoard: hold-and-drag moves the cursor, no popup in between
         )
         val deleteKeySwipeLeft = enum(
             key = "gestures__delete_key_swipe_left",

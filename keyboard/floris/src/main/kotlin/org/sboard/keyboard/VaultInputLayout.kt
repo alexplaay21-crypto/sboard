@@ -99,7 +99,7 @@ fun VaultInputLayout(modifier: Modifier = Modifier) {
             SnyggIconButton(FlorisImeUi.ClipboardHeaderButton.elementName, onClick = { close() }, modifier = sizeModifier) {
                 SnyggIcon(imageVector = Icons.AutoMirrored.Filled.ArrowBack)
             }
-            SnyggText(FlorisImeUi.ClipboardHeaderText.elementName, modifier = Modifier.weight(1f), text = "sBoard Pass")
+            SnyggText(FlorisImeUi.ClipboardHeaderText.elementName, modifier = Modifier.weight(1f), text = "sPass")
             if (unlocked && provider != null) {
                 SnyggIconButton(FlorisImeUi.ClipboardHeaderButton.elementName, onClick = { provider.lock() }, modifier = sizeModifier) {
                     SnyggIcon(imageVector = Icons.Default.Lock)

@@ -60,10 +60,10 @@ class SBoardAutofillService : AutofillService() {
             if (!session.isUnlocked && datasets == 0) {
                 // Locked: one "Unlock sBoard" entry for the whole form. After unlocking, the activity
                 // returns the matching logins as ready-to-tap suggestions (no second step).
-                val pres = AutofillDatasets.presentation(this, tr("Разблокировать sBoard"), form.webDomain ?: tr("Хранилище sBoard"), R.drawable.ic_autofill_lock)
+                val pres = AutofillDatasets.presentation(this, tr("Открыть sPass"), form.webDomain ?: "sPass", R.drawable.ic_autofill_lock)
                 val sender = AutofillDatasets.pendingIntentSender(this, AutofillActivity.intent(this, AutofillActivity.MODE_UNLOCK_LIST, null), 998)
                 if (Build.VERSION.SDK_INT >= 30) {
-                    val inline = AutofillDatasets.inlinePresentation(this, inlineRequest, 0, tr("Разблокировать sBoard"), null)
+                    val inline = AutofillDatasets.inlinePresentation(this, inlineRequest, 0, tr("Открыть sPass"), null)
                     @Suppress("DEPRECATION")
                     if (inline != null) response.setAuthentication(form.allIds.toTypedArray(), sender, pres, inline)
                     else response.setAuthentication(form.allIds.toTypedArray(), sender, pres)
@@ -81,8 +81,8 @@ class SBoardAutofillService : AutofillService() {
                 }
                 // Entry to search the whole Vault (also links this site/app to the chosen login).
                 val pickIntent = AutofillActivity.intent(this, if (session.isUnlocked) AutofillActivity.MODE_PICK else AutofillActivity.MODE_UNLOCK_PICK, null)
-                val pickTitle = if (session.isUnlocked) tr("Выбрать в sBoard") else tr("Разблокировать sBoard")
-                val pickPresentation = AutofillDatasets.presentation(this, pickTitle, form.webDomain ?: tr("Хранилище sBoard"), R.drawable.ic_autofill_lock)
+                val pickTitle = if (session.isUnlocked) tr("Выбрать в sBoard") else tr("Открыть sPass")
+                val pickPresentation = AutofillDatasets.presentation(this, pickTitle, form.webDomain ?: "sPass", R.drawable.ic_autofill_lock)
                 response.addDataset(Dataset.Builder(pickPresentation).apply {
                     form.allIds.forEach { setValue(it, null, pickPresentation) }
                     setAuthentication(AutofillDatasets.pendingIntentSender(this@SBoardAutofillService, pickIntent, 999))
@@ -114,6 +114,7 @@ class SBoardAutofillService : AutofillService() {
             val form = FieldParser.parse(structure, captureValues = true)
             val password = form.values[FieldKind.PASSWORD] ?: form.values[FieldKind.NEW_PASSWORD]
             if (password.isNullOrBlank()) return callback.onSuccess()
+            KeyboardSaveOffer.markAutofillSaveRequested(form.packageName)
             val token = PendingSaves.put(
                 PendingSaves.Entry(
                     username = form.values[FieldKind.USERNAME] ?: form.values[FieldKind.EMAIL].orEmpty(),

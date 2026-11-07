@@ -76,7 +76,7 @@ fun KeyboardScreen(nav: Navigator) {
                 ListRow(tr("Звук и вибрация"), tr("Звук клавиш, громкость, сила вибрации"), icon = Icons.AutoMirrored.Rounded.VolumeUp, onClick = { open("feedback") })
                 ListRow(tr("Вид и размер"), tr("Высота, ряд цифр, режим одной руки, расстояние между клавишами"), icon = Icons.Rounded.Straighten, onClick = { open("layout") })
                 ListRow(tr("Тема клавиатуры"), tr("Цвета, форма клавиш, размеры значков"), icon = Icons.Rounded.Palette, onClick = { nav.push(Route.KeyboardTheme) })
-                ListRow(tr("Панель инструментов"), tr("sBoard Pass, эмодзи, буфер обмена, переводчик"), icon = Icons.Rounded.ViewDay, onClick = { open("toolbar") })
+                ListRow(tr("Панель инструментов"), tr("sPass, эмодзи, буфер обмена, переводчик"), icon = Icons.Rounded.ViewDay, onClick = { open("toolbar") })
                 ListRow(tr("Голосовой ввод"), tr("Google или встроенное распознавание"), icon = Icons.Rounded.Mic, onClick = { open("voice") })
                 ListRow(tr("Личный словарь и сокращения"), tr("Свои слова и быстрые фразы"), icon = Icons.AutoMirrored.Rounded.MenuBook, onClick = { open("dictionary") })
             }
@@ -135,7 +135,7 @@ private fun LanguagesSection(nav: Navigator) {
             }
         }
         item {
-            Text(tr("Сменить язык: проведите по пробелу влево или вправо, а удержание пробела покажет список языков."),
+            Text(tr("Сменить язык: кнопка с глобусом слева от пробела. Проведите пальцем по пробелу — двигается курсор."),
                 style = MaterialTheme.typography.bodySmall, color = palette.textFaint)
         }
     }
@@ -217,8 +217,8 @@ private fun GesturesSection() {
     val scope = rememberCoroutineScope()
     var swipe by remember { mutableStateOf(pref(K::swipeTyping, true)) }
     var swipeTrail by remember { mutableStateOf(pref(K::swipeTrail, true)) }
-    var spaceSwipe by remember { mutableStateOf(pref(K::spaceSwipe, "language")) }
-    var spaceLong by remember { mutableStateOf(pref(K::spaceLongPress, "languages")) }
+    var spaceSwipe by remember { mutableStateOf(pref(K::spaceSwipe, "cursor")) }
+    var spaceLong by remember { mutableStateOf(pref(K::spaceLongPress, "none")) }
     var deleteWords by remember { mutableStateOf(pref(K::deleteSwipeWords, false)) }
     var keyPopup by remember { mutableStateOf(pref(K::keyPopup, true)) }
     var symbolHints by remember { mutableStateOf(pref(K::symbolHints, true)) }
@@ -233,9 +233,9 @@ private fun GesturesSection() {
         item {
             SBCard {
                 Text(tr("Свайп по пробелу"), style = MaterialTheme.typography.titleSmall, color = palette.text)
-                SegmentedControl(listOf("language" to tr("Смена языка"), "cursor" to tr("Курсор")), spaceSwipe, { spaceSwipe = it; scope.launch { K.setSpaceSwipe(it) } })
+                SegmentedControl(listOf("cursor" to tr("Курсор"), "language" to tr("Смена языка")), spaceSwipe, { spaceSwipe = it; scope.launch { K.setSpaceSwipe(it) } })
                 Text(tr("Удержание пробела"), style = MaterialTheme.typography.titleSmall, color = palette.text)
-                SegmentedControl(listOf("languages" to tr("Языки"), "keyboards" to tr("Клавиатуры")), spaceLong, { spaceLong = it; scope.launch { K.setSpaceLongPress(it) } })
+                SegmentedControl(listOf("none" to tr("Ничего"), "languages" to tr("Языки"), "keyboards" to tr("Клавиатуры")), spaceLong, { spaceLong = it; scope.launch { K.setSpaceLongPress(it) } })
             }
         }
         item { SectionTitle(tr("Нажатия")) }
@@ -349,16 +349,20 @@ private fun ToolbarSection() {
         message?.let { item { Banner(it, Tone.SUCCESS) } }
         item {
             SBCard {
-                SwitchRow(tr("Строка инструментов"), tr("Подсказки и быстрые действия: эмодзи, sBoard Pass, буфер, переводчик, голос, одна рука"), smartbar, Icons.Rounded.ViewDay) { smartbar = it; scope.launch { K.setSmartbar(it) } }
+                SwitchRow(tr("Строка инструментов"), tr("Подсказки и быстрые действия: эмодзи, sPass, буфер, переводчик, голос, одна рука"), smartbar, Icons.Rounded.ViewDay) { smartbar = it; scope.launch { K.setSmartbar(it) } }
                 SecondaryButton(tr("Сбросить порядок кнопок"), { scope.launch { K.resetToolbar(); message = tr("Порядок кнопок восстановлен") } }, icon = Icons.Rounded.RestartAlt)
                 Text(tr("Чтобы изменить порядок кнопок, нажмите «⋯» на панели клавиатуры и выберите «Изменить». Размер значков меняется в редакторе темы."), style = MaterialTheme.typography.bodySmall, color = palette.textFaint)
             }
         }
-        item { SectionTitle(tr("sBoard Pass")) }
+        item { SectionTitle("sPass") }
         item {
             SBCard {
-                SwitchRow(tr("sBoard Pass в клавиатуре"), tr("Вставка логинов, email, телефонов, адресов, паролей и OTP из хранилища"), AppSettings.keyboardVaultBar.value, Icons.Rounded.Key) { AppSettings.setKeyboardVaultBar(it) }
+                SwitchRow(tr("sPass в клавиатуре"), tr("Вставка логинов, email, телефонов, адресов, паролей и OTP из хранилища"), AppSettings.keyboardVaultBar.value, Icons.Rounded.Key) { AppSettings.setKeyboardVaultBar(it) }
                 SwitchRow(tr("Биометрия перед вставкой секретов"), tr("Пароли, коды и карты вставляются только после подтверждения"), AppSettings.biometricForSensitive.value, Icons.Rounded.Fingerprint) { AppSettings.setBiometricForSensitive(it) }
+                var offerSave by remember { mutableStateOf(org.sboard.keyboard.SBoardPasswordCapture.enabled) }
+                SwitchRow(tr("Предлагать сохранить пароль"), tr("После входа в Telegram, Gmail, игры и другие приложения, где пароль набран клавиатурой sBoard"), offerSave, Icons.Rounded.Save) {
+                    offerSave = it; org.sboard.keyboard.SBoardPasswordCapture.setEnabled(context, it)
+                }
             }
         }
         item { SectionTitle(tr("Буфер обмена")) }
@@ -380,7 +384,6 @@ private fun ToolbarSection() {
 private fun VoiceSection() {
     val context = LocalContext.current
     var engine by remember { mutableStateOf(SBoardVoice.engine(context)) }
-    var keyVisible by remember { mutableStateOf(SBoardVoice.keyVisible(context)) }
     var googleAvailable by remember { mutableStateOf(false) }
     var builtinAvailable by remember { mutableStateOf(false) }
     var micGranted by remember { mutableStateOf(false) }
@@ -396,7 +399,6 @@ private fun VoiceSection() {
     ScreenList(bottomPadding = 40.dp) {
         item {
             SBCard {
-                SwitchRow(tr("Кнопка микрофона"), tr("В нижнем ряду рядом с пробелом, как на Samsung"), keyVisible, Icons.Rounded.Mic) { keyVisible = it; SBoardVoice.setKeyVisible(context, it) }
                 Text(tr("Распознавание"), style = MaterialTheme.typography.titleSmall, color = palette.text)
                 SegmentedControl(listOf("auto" to tr("Авто"), "google" to "Google", "builtin" to tr("Встроенное")), engine, { engine = it; SBoardVoice.setEngine(context, it) })
                 Text(tr("«Google» — голосовой ввод Google (лучшее качество, нужно приложение Google или Gboard). «Встроенное» — текст появляется прямо в sBoard, через службу распознавания телефона."),

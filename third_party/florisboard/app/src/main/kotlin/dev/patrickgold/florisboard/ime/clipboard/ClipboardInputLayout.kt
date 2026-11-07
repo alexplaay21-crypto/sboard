@@ -28,6 +28,11 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -347,7 +352,19 @@ fun ClipboardInputLayout(
                 }
             } else {
                 val text = item.stringRepresentation()
-                Column {
+                // sBoard: visible pin button on every clip (long-press menu still works).
+                Icon(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(30.dp)
+                        .clip(CircleShape)
+                        .clickable { if (item.isPinned) clipboardManager.unpinClip(item) else clipboardManager.pinClip(item) }
+                        .padding(6.dp),
+                    imageVector = if (item.isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
+                    contentDescription = stringRes(if (item.isPinned) R.string.clip__unpin_item else R.string.clip__pin_item),
+                    tint = LocalContentColor.current.copy(alpha = if (item.isPinned) 1f else 0.55f),
+                )
+                Column(Modifier.padding(end = 26.dp)) {
                     ClipTextItemDescription(
                         elementName = FlorisImeUi.ClipboardItemDescription.elementName,
                         attributes = attributes,

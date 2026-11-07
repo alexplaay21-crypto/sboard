@@ -1,5 +1,6 @@
 package com.sboard.app.feature.keyboard
 
+import androidx.lifecycle.withStateAtLeast
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -43,21 +44,36 @@ class KeyboardAuthActivity : SecureActivity() {
             SBoardTheme {
                 val unlocked by VaultSessionProvider.session.unlocked.collectAsState()
                 var error by remember { mutableStateOf<String?>(null) }
-                Box(Modifier.fillMaxSize().background(palette.background).systemBarsPadding(), contentAlignment = Alignment.Center) {
-                    when {
-                        !unlocked -> UnlockPanel(title = tr("sBoard Pass"), subtitle = tr("Разблокируйте хранилище для вставки данных"), onUnlocked = {
+                var needPassword by remember { mutableStateOf(false) }
+                // Only the system biometric prompt is shown over the current app; the value is typed
+                // into the field right after. The full unlock screen appears only when biometrics
+                // are not set up (master password needed).
+                LaunchedEffect(Unit) {
+                    lifecycle.withStateAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) {}
+                    if (!VaultSessionProvider.session.isUnlocked) {
+                        if (Biometrics.isEnabled(this@KeyboardAuthActivity) && Biometrics.canUseStrong(this@KeyboardAuthActivity)) {
+                            when (val r = Biometrics.unlock(this@KeyboardAuthActivity)) {
+                                AuthResult.Success -> if (mode == MODE_CONFIRM && entryId != null && fieldKey != null) queueAndFinish(entryId, fieldKey, target) else finish()
+                                AuthResult.Cancelled -> finish()
+                                is AuthResult.Failed -> { error = r.message; needPassword = true }
+                            }
+                        } else needPassword = true
+                    } else if (mode == MODE_UNLOCK) finish()
+                    else error = confirm(entryId, fieldKey, target)
+                }
+                if (needPassword && !unlocked) {
+                    Box(Modifier.fillMaxSize().background(palette.background.copy(alpha = 0.96f)).systemBarsPadding(), contentAlignment = Alignment.Center) {
+                        UnlockPanel(title = "sPass", subtitle = tr("Разблокируйте sPass для вставки данных"), autoBiometric = false, onUnlocked = {
                             if (mode == MODE_CONFIRM && entryId != null && fieldKey != null) queueAndFinish(entryId, fieldKey, target) else finish()
                         })
-                        mode == MODE_UNLOCK -> LaunchedEffect(Unit) { finish() }
-                        else -> {
-                            LaunchedEffect(Unit) { error = confirm(entryId, fieldKey, target) }
-                            Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                                IconBadge(Icons.Rounded.Key, size = 60.dp)
-                                Text(tr("Подтвердите вставку"), style = MaterialTheme.typography.headlineSmall, color = palette.text)
-                                AnimatedBanner(error, Tone.DANGER)
-                                PrimaryButton(tr("Подтвердить"), { lifecycleScope.launch { error = confirm(entryId, fieldKey, target) } })
-                                SecondaryButton(tr("Отмена"), { finish() })
-                            }
+                    }
+                } else if (error != null) {
+                    Box(Modifier.fillMaxSize().background(palette.background.copy(alpha = 0.9f)).systemBarsPadding(), contentAlignment = Alignment.Center) {
+                        Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            IconBadge(Icons.Rounded.Key, size = 60.dp)
+                            AnimatedBanner(error, Tone.DANGER)
+                            PrimaryButton(tr("Повторить"), { lifecycleScope.launch { error = confirm(entryId, fieldKey, target) } })
+                            SecondaryButton(tr("Отмена"), { finish() })
                         }
                     }
                 }

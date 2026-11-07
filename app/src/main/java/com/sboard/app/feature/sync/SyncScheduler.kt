@@ -54,7 +54,7 @@ object SyncScheduler {
         if (!GoogleAccount.isConnected(context) || !AppSettings.autoSync.value) {
             wm.cancelUniqueWork(PERIODIC); return
         }
-        val request = PeriodicWorkRequestBuilder<SyncWorker>(1, TimeUnit.HOURS)
+        val request = PeriodicWorkRequestBuilder<SyncWorker>(24, TimeUnit.HOURS) // daily; changes sync right away
             .setConstraints(constraints())
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 60, TimeUnit.SECONDS)
             .build()

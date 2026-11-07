@@ -143,7 +143,7 @@ fun SyncScreen(nav: Navigator) {
                 item { SectionTitle(tr("Настройки")) }
                 item {
                     SBCard(padding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)) {
-                        SwitchRow(tr("Автоматическая синхронизация"), tr("После изменений, при запуске и каждый час"), AppSettings.autoSync.value, Icons.Rounded.Autorenew) {
+                        SwitchRow(tr("Автоматическая синхронизация"), tr("При добавлении и изменении записей, при входе в sPass и раз в день"), AppSettings.autoSync.value, Icons.Rounded.Autorenew) {
                             AppSettings.setAutoSync(it); SyncScheduler.ensurePeriodic(context)
                         }
                         SwitchRow(tr("Только по Wi-Fi"), tr("Не использовать мобильный интернет"), AppSettings.syncOnUnmeteredOnly.value, Icons.Rounded.Wifi) {

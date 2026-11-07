@@ -12,6 +12,7 @@ object SBoardTypingPrefs {
     fun load(context: Context) {
         backspaceSpeed = prefs(context).getInt("backspace_speed", 100)
         SBoardClipboard.excludeCodes = prefs(context).getBoolean("clip_exclude_codes", true)
+        SBoardPasswordCapture.load(context)
     }
 
     fun setExcludeCodes(context: Context, value: Boolean) {

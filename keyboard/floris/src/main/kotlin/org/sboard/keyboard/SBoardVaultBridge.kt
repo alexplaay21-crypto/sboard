@@ -33,6 +33,8 @@ interface VaultKeyboardProvider {
     fun requestConfirmedInsert(context: Context, entryId: String, fieldKey: String, targetPackage: String?)
     fun lock()
     fun text(key: String): String
+    /** Offers to save a password typed with the keyboard in [packageName] (Samsung-Pass-style prompt). */
+    fun offerPasswordSave(context: Context, packageName: String, username: String, password: String) {}
 }
 
 /** Online translator supplied by the sBoard app (network use only on explicit tap). */
@@ -43,6 +45,9 @@ interface KeyboardTranslator {
     fun text(key: String): String
     fun loadPair(): Pair<String, String>
     fun savePair(from: String, to: String)
+    /** Recently chosen target languages, most recent first. */
+    fun recent(): List<String> = emptyList()
+    fun rememberRecent(code: String) {}
 }
 
 object SBoardVaultBridge {

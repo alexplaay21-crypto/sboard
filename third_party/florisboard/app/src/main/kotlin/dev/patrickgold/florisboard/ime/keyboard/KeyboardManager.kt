@@ -701,6 +701,19 @@ class KeyboardManager(context: Context) : InputKeyEventReceiver {
     }
 
     override fun onInputKeyUp(data: KeyData) = activeState.batchEdit {
+        // sBoard: while searching emoji the letter keys type into the search query.
+        if (org.sboard.keyboard.SBoardEmojiSearch.active.value && activeState.imeUiMode == ImeUiMode.TEXT) {
+            when {
+                data.code == KeyCode.DELETE -> { org.sboard.keyboard.SBoardEmojiSearch.backspace(); return@batchEdit }
+                data.code == KeyCode.SPACE -> { org.sboard.keyboard.SBoardEmojiSearch.type(" "); return@batchEdit }
+                data.code == KeyCode.ENTER -> { org.sboard.keyboard.SBoardEmojiSearch.close(); return@batchEdit }
+                data.type == KeyType.CHARACTER && data.code > 0 -> {
+                    org.sboard.keyboard.SBoardEmojiSearch.type(data.asString(isForDisplay = false))
+                    if (activeState.inputShiftState != InputShiftState.CAPS_LOCK) activeState.inputShiftState = InputShiftState.UNSHIFTED
+                    return@batchEdit
+                }
+            }
+        }
         when (data.code) {
             KeyCode.ARROW_DOWN,
             KeyCode.ARROW_LEFT,
@@ -857,6 +870,7 @@ class KeyboardManager(context: Context) : InputKeyEventReceiver {
 
     override fun onInputKeyRepeat(data: KeyData) {
         FlorisImeService.inputFeedbackController()?.keyRepeatedAction(data)
+        if (org.sboard.keyboard.SBoardEmojiSearch.active.value && data.code == KeyCode.DELETE) { org.sboard.keyboard.SBoardEmojiSearch.backspace(); return }
         when (data.code) {
             KeyCode.ARROW_DOWN,
             KeyCode.ARROW_LEFT,
@@ -1047,8 +1061,6 @@ class KeyboardManager(context: Context) : InputKeyEventReceiver {
                         UtilityKeyAction.DYNAMIC_SWITCH_LANGUAGE_EMOJIS -> shouldShowLanguageSwitch()
                     }
                 }
-                // sBoard: microphone key in the bottom row (can be turned off in settings).
-                KeyCode.VOICE_INPUT -> org.sboard.keyboard.SBoardVoice.keyVisible(appContext)
                 else -> true
             }
         }

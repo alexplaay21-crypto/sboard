@@ -50,7 +50,7 @@ fun VaultScreen(nav: Navigator) {
     Box(Modifier.fillMaxSize()) {
         ScreenList(Modifier.statusBarsPadding()) {
             item {
-                ScreenHeader(tr("Хранилище"), tr("Записей: {0}", items.size)) {
+                ScreenHeader("sPass", tr("Записей: {0}", items.size)) {
                     IconButton(onClick = { VaultSessionProvider.session.lock() }) { Icon(Icons.Rounded.Lock, tr("Заблокировать"), tint = palette.textMuted) }
                     IconButton(onClick = { nav.push(Route.Trash) }) { Icon(Icons.Rounded.DeleteOutline, tr("Недавно удалённые"), tint = palette.textMuted) }
                 }

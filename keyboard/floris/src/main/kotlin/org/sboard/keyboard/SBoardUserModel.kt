@@ -94,6 +94,8 @@ object SBoardUserModel {
      */
     @Synchronized
     fun learnFromContext(language: String, textBeforeCursor: String) {
+        previousWord = Regex("""([\p{L}'’-]+)[^\p{L}]*$""").find(textBeforeCursor.takeLast(60))
+            ?.groupValues?.get(1)?.lowercase(Locale.ROOT)?.takeIf { textBeforeCursor.isNotEmpty() && !textBeforeCursor.last().isLetter() }
         if (!learningEnabled) return
         // Text got shorter (message sent, field cleared, word deleted): the same position may be
         // reached again with new words, so forget the dedupe key.
@@ -127,6 +129,42 @@ object SBoardUserModel {
     private fun trim(m: Model) {
         if (m.words.size > MAX_WORDS) m.words.entries.sortedBy { it.value }.take(m.words.size - MAX_WORDS).forEach { m.words.remove(it.key) }
         if (m.pairs.size > MAX_PAIRS) m.pairs.entries.sortedBy { it.value }.take(m.pairs.size - MAX_PAIRS).forEach { m.pairs.remove(it.key) }
+    }
+
+    /** Typed words that auto-correction already replaced once (typed word -> times corrected). */
+    private val corrected = HashMap<String, Int>()
+
+    /** Records that [typed] was auto-corrected (called when the correction is committed). */
+    @Synchronized
+    fun noteAutoCorrected(language: String, typed: String) {
+        val key = language + ":" + typed.lowercase(Locale.ROOT)
+        corrected[key] = (corrected[key] ?: 0) + 1
+    }
+
+    /**
+     * Rule from the user: the first time an unknown word is fixed; when exactly the same word is
+     * typed again it is meant, so it is not corrected any more and becomes a known word.
+     */
+    @Synchronized
+    fun shouldAutoCorrect(language: String, typed: String): Boolean {
+        val w = typed.lowercase(Locale.ROOT)
+        if ((corrected[language + ":" + w] ?: 0) == 0) return true
+        val m = model(language)
+        m.words[w] = maxOf(m.words[w] ?: 0, 2) // now a known word for suggestions and spelling
+        dirty += language
+        return false
+    }
+
+    /** The last complete word before the cursor (context for swipe typing). */
+    @Volatile var previousWord: String? = null
+        private set
+
+    /** How often [word] followed [previousWord] — boosts the matching swipe candidate. */
+    @Synchronized
+    fun contextBoost(language: String, word: String): Float {
+        val prev = previousWord ?: return 1f
+        val n = model(language).pairs[prev + " " + word.lowercase(Locale.ROOT)] ?: return 1f
+        return 1f + minOf(n, 20) * 0.6f
     }
 
     @Synchronized

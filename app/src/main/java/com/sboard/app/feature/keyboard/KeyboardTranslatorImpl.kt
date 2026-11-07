@@ -12,6 +12,8 @@ class KeyboardTranslatorImpl(context: Context) : KeyboardTranslator {
     override suspend fun translate(text: String, from: String, to: String): String = Translator.translate(app, text, from, to)
     override fun loadPair(): Pair<String, String> = (prefs.getString("from", Translator.AUTO) ?: Translator.AUTO) to (prefs.getString("to", "en") ?: "en")
     override fun savePair(from: String, to: String) { prefs.edit().putString("from", from).putString("to", to).apply() }
+    override fun recent(): List<String> = Translator.recent(app)
+    override fun rememberRecent(code: String) = Translator.rememberRecent(app, code)
     override fun text(key: String): String = when (key) {
         "translate_hint" -> tr("Пишите как обычно — перевод появится здесь")
         "translate_action" -> tr("Перевести")
