@@ -28,18 +28,42 @@ object Translator {
     const val MAX_CHARS = 3000
     private const val PREFS = "sboard_translator"
 
-    val languages: List<Language> get() = listOf(
-        Language("ru", tr("Русский")), Language("en", tr("Английский")), Language("de", tr("Немецкий")),
-        Language("fr", tr("Французский")), Language("es", tr("Испанский")), Language("it", tr("Итальянский")),
-        Language("uk", tr("Украинский")), Language("tr", tr("Турецкий")), Language("zh-CN", tr("Китайский")),
-        Language("ja", tr("Японский")), Language("ko", tr("Корейский")), Language("ar", tr("Арабский")),
-        Language("pt", tr("Португальский")), Language("pl", tr("Польский")), Language("kk", tr("Казахский")),
-        Language("uz", tr("Узбекский")), Language("tg", tr("Таджикский")), Language("az", tr("Азербайджанский")),
-        Language("hy", tr("Армянский")), Language("ka", tr("Грузинский")), Language("be", tr("Белорусский")),
+    /** Language codes supported by the translator, keyboard layouts and interface language packs. */
+    val CODES = listOf(
+        "ru", "en", "de", "fr", "es", "it", "pt", "pl", "uk", "be", "kk", "uz", "tg", "az", "hy", "ka",
+        "tr", "ar", "fa", "he", "hi", "bn", "ur", "ta", "th", "vi", "id", "zh-CN", "ja", "ko",
+        "bg", "cs", "sk", "sl", "hr", "sr", "ro", "hu", "el", "lt", "lv", "et", "fi", "sv", "no", "da",
+        "nl", "is", "ca", "eo",
     )
+
+    /** Display name of a language in the current interface language (e.g. "Deutsch" → "Немецкий"). */
+    fun displayName(code: String): String {
+        val ui = java.util.Locale.forLanguageTag(com.sboard.app.core.i18n.SBoardI18n.effectiveLanguage())
+        val name = java.util.Locale.forLanguageTag(code).getDisplayName(ui)
+        return name.replaceFirstChar { it.titlecase(ui) }
+    }
+
+    /** Name of a language in that language itself ("Deutsch", "Русский"). */
+    fun nativeName(code: String): String {
+        val l = java.util.Locale.forLanguageTag(code)
+        return l.getDisplayLanguage(l).replaceFirstChar { it.titlecase(l) }
+    }
+
+    val languages: List<Language> get() = CODES.map { Language(it, displayName(it)) }.let { list ->
+        list.take(2) + list.drop(2).sortedBy { it.name }
+    }
 
     private val client by lazy {
         OkHttpClient.Builder().connectTimeout(8, TimeUnit.SECONDS).readTimeout(12, TimeUnit.SECONDS).build()
+    }
+
+    /** Recently chosen languages (most recent first), shown on top of the language list. */
+    fun recent(context: Context): List<String> = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        .getString("recent", "").orEmpty().split(',').filter { it.isNotBlank() && it in CODES }
+    fun rememberRecent(context: Context, code: String) {
+        if (code !in CODES) return
+        val list = (listOf(code) + recent(context).filter { it != code }).take(5)
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("recent", list.joinToString(",")).apply()
     }
 
     fun engine(context: Context): String = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("engine", ENGINE_GOOGLE) ?: ENGINE_GOOGLE
@@ -69,7 +93,7 @@ object Translator {
     /** Backwards-compatible entry used by older call sites (Google engine). */
     suspend fun translate(text: String, from: String, to: String): String = withContext(Dispatchers.IO) { google(text.take(MAX_CHARS), from, to) }
 
-    private fun google(text: String, from: String, to: String): String {
+    internal fun google(text: String, from: String, to: String): String {
         val url = "https://translate.googleapis.com/translate_a/single".toHttpUrl().newBuilder()
             .addQueryParameter("client", "gtx").addQueryParameter("sl", from).addQueryParameter("tl", to)
             .addQueryParameter("dt", "t").addQueryParameter("q", text).build()

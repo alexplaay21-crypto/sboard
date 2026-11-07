@@ -309,15 +309,15 @@ abstract class FlorisPreferenceModel : PreferenceModel() {
         )
         val spaceBarSwipeLeft = enum(
             key = "gestures__space_bar_swipe_left",
-            default = SwipeAction.MOVE_CURSOR_LEFT,
+            default = SwipeAction.SWITCH_TO_PREV_SUBTYPE, // sBoard: space swipe/long-press switch the language
         )
         val spaceBarSwipeRight = enum(
             key = "gestures__space_bar_swipe_right",
-            default = SwipeAction.MOVE_CURSOR_RIGHT,
+            default = SwipeAction.SWITCH_TO_NEXT_SUBTYPE, // sBoard: space swipe/long-press switch the language
         )
         val spaceBarLongPress = enum(
             key = "gestures__space_bar_long_press",
-            default = SwipeAction.SHOW_INPUT_METHOD_PICKER,
+            default = SwipeAction.SHOW_SUBTYPE_PICKER, // sBoard: space swipe/long-press switch the language
         )
         val deleteKeySwipeLeft = enum(
             key = "gestures__delete_key_swipe_left",
@@ -373,7 +373,7 @@ abstract class FlorisPreferenceModel : PreferenceModel() {
         )
         val audioActivationMode = enum(
             key = "input_feedback__audio_activation_mode",
-            default = InputFeedbackActivationMode.RESPECT_SYSTEM_SETTINGS,
+            default = InputFeedbackActivationMode.IGNORE_SYSTEM_SETTINGS, // sBoard: own on/off switches
         )
         val audioVolume = int(
             key = "input_feedback__audio_volume",
@@ -406,7 +406,7 @@ abstract class FlorisPreferenceModel : PreferenceModel() {
         )
         val hapticActivationMode = enum(
             key = "input_feedback__haptic_activation_mode",
-            default = InputFeedbackActivationMode.RESPECT_SYSTEM_SETTINGS,
+            default = InputFeedbackActivationMode.IGNORE_SYSTEM_SETTINGS, // sBoard: own on/off switches
         )
         val hapticVibrationMode = enum(
             key = "input_feedback__haptic_vibration_mode",

@@ -119,7 +119,10 @@ fun SecurityScreen(nav: Navigator) {
     var confirmWipe by remember { mutableStateOf(false) }
     var confirmRecoveryReplace by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<Pair<String, Tone>?>(null) }
-    LaunchedEffect(Unit) { hasRecovery = keys.hasRecoveryKey() }
+    var showReset by remember { mutableStateOf(false) }
+    var hasGoogleRecovery by remember { mutableStateOf(false) }
+    var confirmGoogleRecovery by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { hasRecovery = keys.hasRecoveryKey(); hasGoogleRecovery = keys.hasGoogleRecovery() }
 
     Column(Modifier.fillMaxSize()) {
         TopBar(tr("Безопасность"), { nav.pop() })
@@ -129,6 +132,16 @@ fun SecurityScreen(nav: Navigator) {
             item {
                 SBCard(padding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)) {
                     ListRow(tr("Сменить мастер-пароль"), tr("Ключ хранилища перешифровывается, записи не меняются"), icon = Icons.Rounded.Password, onClick = { showChange = true })
+                    ListRow(tr("Не помню текущий пароль"), tr("Подтвердите личность биометрией или кодом экрана и задайте новый"), icon = Icons.Rounded.LockReset, onClick = {
+                        val host = activity ?: return@ListRow
+                        scope.launch {
+                            when (val r = Biometrics.confirm(host, tr("Сброс мастер-пароля"), tr("Подтвердите, что это вы"))) {
+                                AuthResult.Success -> showReset = true
+                                is AuthResult.Failed -> message = r.message to Tone.DANGER
+                                AuthResult.Cancelled -> Unit
+                            }
+                        }
+                    })
                     SwitchRow(tr("Вход по биометрии"), if (Biometrics.canUseStrong(context)) tr("Ключ защищён Android Keystore") else tr("На устройстве нет надёжной биометрии"),
                         biometricEnabled, Icons.Rounded.Fingerprint, enabled = Biometrics.canUseStrong(context)) { on ->
                         scope.launch {
@@ -164,6 +177,19 @@ fun SecurityScreen(nav: Navigator) {
                     }
                 }
             }
+            item { SectionTitle(tr("Восстановление через Google")) }
+            item {
+                SBCard {
+                    SwitchRow(tr("Восстановление через аккаунт Google"), tr("Если забыты и мастер-пароль, и Recovery Key — войдите в Google, и sBoard откроет хранилище"),
+                        hasGoogleRecovery, Icons.Rounded.CloudSync) { on ->
+                        if (on) confirmGoogleRecovery = true
+                        else scope.launch { keys.disableGoogleRecovery(); hasGoogleRecovery = false; message = tr("Восстановление через Google выключено") to Tone.INFO }
+                    }
+                    Text(tr("Ключ восстановления хранится в скрытой папке sBoard в вашем Google Drive вместе с зашифрованной копией. Удобно, но тогда безопасность хранилища равна безопасности аккаунта Google — включите в нём двухэтапную проверку."),
+                        style = MaterialTheme.typography.bodySmall, color = palette.textFaint)
+                    if (hasGoogleRecovery && !GoogleAccount.isConnected(context)) Banner(tr("Подключите Google Drive в разделе «Синхронизация», чтобы ключ был загружен."), Tone.WARNING)
+                }
+            }
             item { SectionTitle(tr("Recovery Key")) }
             item {
                 SBCard {
@@ -188,6 +214,17 @@ fun SecurityScreen(nav: Navigator) {
         }
     }
     if (showChange) ChangePasswordDialog(keys, onDone = { ok -> showChange = false; if (ok) message = tr("Мастер-пароль изменён. Новый пароль применится на всех устройствах после синхронизации.") to Tone.SUCCESS })
+    if (showReset) NewMasterPasswordDialog(mandatory = false) { ok -> showReset = false; if (ok) message = tr("Мастер-пароль изменён") to Tone.SUCCESS }
+    if (confirmGoogleRecovery) ConfirmDialog(tr("Включить восстановление через Google?"),
+        tr("Любой, кто войдёт в ваш аккаунт Google в приложении sBoard, сможет открыть хранилище. Используйте надёжный пароль Google и двухэтапную проверку."),
+        tr("Включить"), onConfirm = {
+            confirmGoogleRecovery = false
+            scope.launch {
+                runCatching { keys.enableGoogleRecovery() }
+                    .onSuccess { hasGoogleRecovery = true; message = tr("Восстановление через Google включено. Ключ будет загружен при синхронизации.") to Tone.SUCCESS }
+                    .onFailure { message = (it.message ?: tr("Не удалось включить")) to Tone.DANGER }
+            }
+        }, onDismiss = { confirmGoogleRecovery = false })
     if (confirmRecoveryReplace) ConfirmDialog(tr("Заменить Recovery Key?"), tr("Старый ключ перестанет работать."), tr("Заменить"),
         onConfirm = { confirmRecoveryReplace = false; scope.launch { newRecovery = keys.createRecoveryKey() } }, onDismiss = { confirmRecoveryReplace = false })
     if (confirmWipe) ConfirmDialog(tr("Удалить все данные?"), tr("Хранилище, ключи и история будут удалены с этого устройства. Копия в Google Drive останется, и её можно восстановить мастер-паролем."),
@@ -286,9 +323,8 @@ fun AppearanceScreen(nav: Navigator) {
             }
             item { SectionTitle(tr("Язык интерфейса")) }
             item {
-                SBCard {
-                    SegmentedControl(listOf(SBoardI18n.MODE_SYSTEM to tr("Системный"), SBoardI18n.MODE_RU to "Русский", SBoardI18n.MODE_EN to "English"),
-                        SBoardI18n.currentMode(), { SBoardI18n.setLanguage(context, it) })
+                SBCard(padding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)) {
+                    ListRow(languageLabel(SBoardI18n.currentMode()), tr("Язык меню и подсказок приложения"), icon = Icons.Rounded.Translate, onClick = { nav.push(Route.AppLanguage) })
                 }
             }
         }
@@ -371,6 +407,75 @@ fun PasswordHealthScreen(nav: Navigator) {
             section(tr("Повторяющиеся пароли"), r.reused)
             section(tr("Давно не менялись"), r.old)
             if (r.total > 0 && r.weak.isEmpty() && r.reused.isEmpty()) item { Banner(tr("Отлично! Слабых и повторяющихся паролей нет."), Tone.SUCCESS) }
+        }
+    }
+}
+
+
+/** Name of an interface language choice ("Системный (Deutsch)", "Русский", ...). */
+fun languageLabel(mode: String): String = when (mode) {
+    SBoardI18n.MODE_SYSTEM -> tr("Системный") + " · " + com.sboard.app.feature.tools.Translator.nativeName(SBoardI18n.systemLanguage())
+    else -> com.sboard.app.feature.tools.Translator.nativeName(mode)
+}
+
+/**
+ * Interface language: Russian and English are built in; every translator language is offered as a
+ * machine-translated language pack that is downloaded once (only interface texts are sent).
+ */
+@Composable
+fun AppLanguageList(onPicked: () -> Unit = {}) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var query by remember { mutableStateOf("") }
+    var downloading by remember { mutableStateOf<String?>(null) }
+    var progress by remember { mutableFloatStateOf(0f) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val current = SBoardI18n.currentMode()
+    val options = listOf(SBoardI18n.MODE_SYSTEM) + com.sboard.app.feature.tools.Translator.CODES
+    val visible = options.filter { code ->
+        query.isBlank() || languageLabel(code).contains(query, true) || com.sboard.app.feature.tools.Translator.displayName(code).contains(query, true)
+    }
+    fun choose(code: String) {
+        val lang = if (code == SBoardI18n.MODE_SYSTEM) SBoardI18n.systemLanguage() else code
+        if (SBoardI18n.hasPack(lang) || lang !in com.sboard.app.feature.tools.Translator.CODES) { SBoardI18n.setLanguage(context, code); onPicked(); return }
+        scope.launch {
+            downloading = code; progress = 0f; error = null
+            val ok = runCatching { com.sboard.app.core.i18n.LanguagePacks.download(context, lang) { progress = it } }.getOrDefault(false)
+            downloading = null
+            if (ok) { SBoardI18n.setLanguage(context, code); onPicked() }
+            else error = tr("Не удалось загрузить язык. Проверьте интернет и попробуйте ещё раз.")
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SBTextField(query, { query = it }, tr("Поиск языка"))
+        AnimatedBanner(error, Tone.DANGER)
+        downloading?.let {
+            Text(tr("Загружаем перевод интерфейса… {0}%", (progress * 100).toInt()), style = MaterialTheme.typography.bodySmall, color = palette.textMuted)
+            LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(), color = palette.accent)
+        }
+        visible.forEach { code ->
+            val lang = if (code == SBoardI18n.MODE_SYSTEM) SBoardI18n.systemLanguage() else code
+            val subtitle = when {
+                code == SBoardI18n.MODE_SYSTEM -> tr("Как в настройках телефона")
+                lang == "ru" || lang == "en" -> tr("Встроенный")
+                SBoardI18n.hasPack(lang) -> tr("Загружен · машинный перевод")
+                else -> tr("Машинный перевод · загрузится один раз")
+            }
+            ListRow(languageLabel(code), subtitle, icon = if (code == current) Icons.Rounded.CheckCircle else Icons.Rounded.Language,
+                titleColor = if (code == current) palette.accent else palette.text,
+                trailing = null, onClick = { if (downloading == null) choose(code) })
+        }
+    }
+}
+
+@Composable
+fun AppLanguageScreen(nav: Navigator) {
+    Column(Modifier.fillMaxSize()) {
+        TopBar(tr("Язык интерфейса"), { nav.pop() })
+        ScreenList(bottomPadding = 40.dp) {
+            item { SBCard(padding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)) { AppLanguageList(onPicked = { nav.pop() }) } }
+            item { Text(tr("Русский и английский встроены. Остальные языки переводятся автоматически: при выборе sBoard один раз отправляет в переводчик только тексты меню — никаких ваших данных."),
+                style = MaterialTheme.typography.bodySmall, color = palette.textFaint) }
         }
     }
 }

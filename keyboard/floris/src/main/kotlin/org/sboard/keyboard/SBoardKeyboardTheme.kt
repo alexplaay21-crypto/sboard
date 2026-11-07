@@ -35,6 +35,14 @@ data class KeyboardThemeSpec(
     val keyStyle: KeyStyle = KeyStyle.ROUNDED,
     val cornerRadius: Int = 10,
     val fontScale: Int = 100,
+    /** Toolbar icon size in sp. */
+    val toolbarIconSize: Int = 26,
+    /** Size of icons/labels on Shift, Delete, Enter, ?123 relative to letters (percent). */
+    val functionKeyScale: Int = 112,
+    /** "normal", "medium" or "bold" letters. */
+    val fontWeight: String = "normal",
+    /** Show the small long-press hints on letter keys. */
+    val showHints: Boolean = true,
 ) {
     companion object {
         /** Night default — palette inspired by a moonlit night sky (indigo, lavender, rose). */
@@ -66,7 +74,9 @@ object SBoardThemeStore {
     fun isCustom(componentId: String) = componentId == CUSTOM_DAY || componentId == CUSTOM_NIGHT
 
     private fun specFile(context: Context, night: Boolean) = File(context.filesDir, "sboard_kb_theme_${if (night) "night" else "day"}.json")
-    private fun stylesheetFile(context: Context, componentId: String) = File(context.filesDir, "sboard_kb_stylesheet_$componentId.json")
+    // Versioned name: a new app version regenerates stylesheets built from older templates.
+    private fun stylesheetFile(context: Context, componentId: String) = File(context.filesDir, "sboard_kb_stylesheet_v${STYLE_VERSION}_$componentId.json")
+    private const val STYLE_VERSION = 2
 
     fun load(context: Context, night: Boolean): KeyboardThemeSpec = runCatching {
         json.decodeFromString(KeyboardThemeSpec.serializer(), specFile(context, night).readText())
@@ -132,9 +142,15 @@ object SBoardThemeStore {
             root[selector] = JsonObject(existing)
         }
         rule("smartbar", "background" to hex(spec.toolbarBackground))
-        rule("key", "font-size" to "${(22 * spec.fontScale / 100)}sp")
-        val fnKeys = "key[code=-11,-7,-202,-201,-203,-227,-212,-213,-205]"
+        rule("smartbar-action-key", "font-size" to "${spec.toolbarIconSize.coerceIn(16, 34)}sp")
+        rule("smartbar-shared-actions-toggle", "font-size" to "${(spec.toolbarIconSize - 2).coerceIn(16, 32)}sp")
+        rule("smartbar-extended-actions-toggle", "font-size" to "${(spec.toolbarIconSize - 2).coerceIn(16, 32)}sp")
+        rule("key", "font-size" to "${(22 * spec.fontScale / 100)}sp", "font-weight" to spec.fontWeight.takeIf { it in setOf("normal", "medium", "bold") }.orEmpty().ifEmpty { "normal" })
+        if (!spec.showHints) rule("key-hint", "foreground" to "transparent")
+        val fnKeys = "key[code=-11,-7,-202,-201,-203,-227,-212,-213,-205,-233]"
         rule(fnKeys, "background" to hex(spec.functionKeyBackground), "foreground" to hex(spec.functionKeyText))
+        rule("key[code=-11,-7,10,-233]", "font-size" to "${(22 * spec.fontScale / 100) * spec.functionKeyScale / 100}sp")
+        rule("key[code=-201,-202,-203]", "font-size" to "${(18 * spec.fontScale / 100) * spec.functionKeyScale / 100}sp")
         rule("key[code=10]", "background" to hex(spec.accent), "foreground" to hex(onColor(spec.accent)))
         rule("key[code=10]:pressed", "background" to hex(shade(spec.accent, -0.15f)), "foreground" to hex(onColor(spec.accent)))
         when (spec.keyStyle) {

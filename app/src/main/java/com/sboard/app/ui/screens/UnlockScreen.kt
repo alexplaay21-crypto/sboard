@@ -53,6 +53,10 @@ fun UnlockPanel(
     var biometricEnabled by remember { mutableStateOf(false) }
     var recoveryMode by remember { mutableStateOf(false) }
     var hasRecovery by remember { mutableStateOf(false) }
+    var showForgot by remember { mutableStateOf(false) }
+    // After unlocking without the master password the user must choose a new one.
+    var resetAfterUnlock by remember { mutableStateOf(false) }
+    var askNewPassword by remember { mutableStateOf(false) }
     var shake by remember { mutableIntStateOf(0) }
     val offset by animateFloatAsState(if (shake % 2 == 1) 1f else 0f, label = "shake")
 
@@ -83,7 +87,7 @@ fun UnlockPanel(
                 val chars = password.toCharArray()
                 if (recoveryMode) keys.unlockWithRecoveryKey(password) else keys.unlockWithPassword(chars)
                 password = ""
-                onUnlocked()
+                if (recoveryMode && resetAfterUnlock) askNewPassword = true else onUnlocked()
             } catch (e: Exception) {
                 error = e.message ?: tr("Не удалось разблокировать")
                 shake++
@@ -116,12 +120,22 @@ fun UnlockPanel(
         if (biometricEnabled && !recoveryMode) {
             SecondaryButton(tr("Войти по биометрии"), { biometric() }, icon = Icons.Rounded.Fingerprint, enabled = !busy)
         }
-        if (hasRecovery) {
-            TextButton(onClick = { recoveryMode = !recoveryMode; password = ""; error = null }) {
-                Text(if (recoveryMode) tr("Использовать мастер-пароль") else tr("Забыли мастер-пароль? Recovery Key"), color = palette.accent)
+        if (recoveryMode) {
+            TextButton(onClick = { recoveryMode = false; resetAfterUnlock = false; password = ""; error = null }) {
+                Text(tr("Использовать мастер-пароль"), color = palette.accent)
             }
+        } else {
+            TextButton(onClick = { showForgot = true }) { Text(tr("Забыли мастер-пароль?"), color = palette.accent) }
         }
         footer()
+        if (showForgot) ForgotPasswordDialog(
+            biometricAvailable = biometricEnabled,
+            recoveryKeyAvailable = hasRecovery,
+            onUseRecoveryKey = { showForgot = false; recoveryMode = true; resetAfterUnlock = true; password = ""; error = null },
+            onUnlocked = { showForgot = false; askNewPassword = true },
+            onDismiss = { showForgot = false },
+        )
+        if (askNewPassword) NewMasterPasswordDialog(mandatory = true) { askNewPassword = false; onUnlocked() }
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
             Icon(Icons.Rounded.Shield, null, tint = palette.textFaint, modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(6.dp))

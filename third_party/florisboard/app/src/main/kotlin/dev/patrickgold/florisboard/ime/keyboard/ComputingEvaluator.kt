@@ -20,6 +20,7 @@ import android.content.Context
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.automirrored.filled.ArrowRightAlt
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -258,6 +259,9 @@ fun ComputingEvaluator.computeImageVector(data: KeyData): ImageVector? {
         }
         KeyCode.IME_UI_MODE_TRANSLATE -> {
             Icons.Default.Translate
+        }
+        KeyCode.IME_UI_MODE_EDITING -> {
+            Icons.Default.EditNote
         }
         KeyCode.LANGUAGE_SWITCH -> {
             Icons.Default.Language

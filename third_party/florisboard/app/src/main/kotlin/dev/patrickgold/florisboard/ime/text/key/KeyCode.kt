@@ -92,6 +92,8 @@ object KeyCode {
     const val IME_UI_MODE_VAULT =           -214
     // Modified for sBoard: opens the translator panel.
     const val IME_UI_MODE_TRANSLATE =       -215
+    // Modified for sBoard: opens the text editing panel.
+    const val IME_UI_MODE_EDITING =         -216
 
     const val SYSTEM_INPUT_METHOD_PICKER =  -221
     const val SYSTEM_PREV_INPUT_METHOD =    -222

@@ -22,7 +22,9 @@ enum class ImeUiMode(val value: Int) {
     CLIPBOARD(2),
     // Modified for sBoard: secure Vault quick-insert panel.
     VAULT(3),
-    TRANSLATE(4);
+    TRANSLATE(4),
+    // Modified for sBoard: text editing panel (cursor, selection, copy/cut/paste, undo/redo).
+    EDITING(5);
 
     companion object {
         fun fromInt(int: Int) = entries.firstOrNull { it.value == int } ?: TEXT

@@ -25,6 +25,8 @@ sealed interface Route {
     data object About : Route
     data object PasswordHealth : Route
     data object KeyboardTheme : Route
+    data class KeyboardSection(val id: String) : Route
+    data object AppLanguage : Route
 }
 
 /** Small state-based navigator: a selected tab plus a back stack of detail routes. */

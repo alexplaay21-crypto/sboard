@@ -135,6 +135,7 @@ data class TextKeyData(
                 IME_UI_MODE_CLIPBOARD,
                 IME_UI_MODE_VAULT,
                 IME_UI_MODE_TRANSLATE,
+                IME_UI_MODE_EDITING,
                 SYSTEM_INPUT_METHOD_PICKER,
                 SYSTEM_PREV_INPUT_METHOD,
                 SYSTEM_NEXT_INPUT_METHOD,
@@ -425,6 +426,12 @@ data class TextKeyData(
             type = KeyType.SYSTEM_GUI,
             code = KeyCode.IME_UI_MODE_TRANSLATE,
             label = "ime_ui_mode_translate",
+        )
+        /** Modified for sBoard: predefined key data for [KeyCode.IME_UI_MODE_EDITING] */
+        val IME_UI_MODE_EDITING = TextKeyData(
+            type = KeyType.SYSTEM_GUI,
+            code = KeyCode.IME_UI_MODE_EDITING,
+            label = "ime_ui_mode_editing",
         )
 
         /** Predefined key data for [KeyCode.SYSTEM_INPUT_METHOD_PICKER] */

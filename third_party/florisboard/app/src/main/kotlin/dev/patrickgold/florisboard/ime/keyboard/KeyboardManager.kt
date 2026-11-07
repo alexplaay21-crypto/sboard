@@ -225,6 +225,13 @@ class KeyboardManager(context: Context) : InputKeyEventReceiver {
     }
 
     fun resetSuggestions(content: EditorContent) {
+        // sBoard: never suggest from or learn the contents of password fields.
+        if (activeState.keyVariation == dev.patrickgold.florisboard.ime.text.key.KeyVariation.PASSWORD || editorInstance.activeInfo.inputAttributes.variation.let {
+                it == InputAttributes.Variation.PASSWORD || it == InputAttributes.Variation.VISIBLE_PASSWORD || it == InputAttributes.Variation.WEB_PASSWORD
+            }) {
+            nlpManager.clearSuggestions()
+            return
+        }
         if (!(activeState.isComposingEnabled || nlpManager.isSuggestionOn())) {
             nlpManager.clearSuggestions()
             return
@@ -751,7 +758,9 @@ class KeyboardManager(context: Context) : InputKeyEventReceiver {
                 activeState.imeUiMode = ImeUiMode.TEXT
                 org.sboard.keyboard.SBoardVaultBridge.translateBarVisible.value = !org.sboard.keyboard.SBoardVaultBridge.translateBarVisible.value
             }
-            KeyCode.VOICE_INPUT -> FlorisImeService.switchToVoiceInputMethod()
+            KeyCode.IME_UI_MODE_EDITING -> activeState.imeUiMode =
+                if (activeState.imeUiMode == ImeUiMode.EDITING) ImeUiMode.TEXT else ImeUiMode.EDITING
+            KeyCode.VOICE_INPUT -> org.sboard.keyboard.SBoardVoice.onVoiceKey(appContext)
             KeyCode.KANA_SWITCHER -> handleKanaSwitch()
             KeyCode.KANA_HIRA -> handleKanaHira()
             KeyCode.KANA_KATA -> handleKanaKata()
@@ -1038,6 +1047,8 @@ class KeyboardManager(context: Context) : InputKeyEventReceiver {
                         UtilityKeyAction.DYNAMIC_SWITCH_LANGUAGE_EMOJIS -> shouldShowLanguageSwitch()
                     }
                 }
+                // sBoard: microphone key in the bottom row (can be turned off in settings).
+                KeyCode.VOICE_INPUT -> org.sboard.keyboard.SBoardVoice.keyVisible(appContext)
                 else -> true
             }
         }

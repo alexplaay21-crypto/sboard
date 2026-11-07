@@ -26,12 +26,12 @@ class DriveClient(
     private val upload: String = UPLOAD,
     private val userInfoUrl: String = "https://www.googleapis.com/oauth2/v3/userinfo",
 ) {
-    data class RemoteFile(val id: String, val version: Long, val modifiedTime: String?, val size: Long, val md5: String?)
+    data class RemoteFile(val id: String, val version: Long, val modifiedTime: String?, val size: Long, val md5: String?, val properties: Map<String, String> = emptyMap())
 
     suspend fun findBackups(token: String): List<RemoteFile> = withContext(Dispatchers.IO) {
         val q = URLEncoder.encode("name = '${BackupFormat.FILE_NAME}' and trashed = false", "UTF-8")
         val url = "$api/files?spaces=appDataFolder&q=$q&orderBy=modifiedTime%20desc&pageSize=10" +
-            "&fields=files(id,version,modifiedTime,size,md5Checksum)"
+            "&fields=files(id,version,modifiedTime,size,md5Checksum,appProperties)"
         execute(token, Request.Builder().url(url).get(), "list").use { response ->
             val files = JSONObject(response.body!!.string()).optJSONArray("files") ?: return@withContext emptyList()
             (0 until files.length()).map { parseFile(files.getJSONObject(it)) }
@@ -39,7 +39,7 @@ class DriveClient(
     }
 
     suspend fun metadata(token: String, fileId: String): RemoteFile = withContext(Dispatchers.IO) {
-        execute(token, Request.Builder().url("$api/files/$fileId?fields=id,version,modifiedTime,size,md5Checksum").get(), "metadata").use {
+        execute(token, Request.Builder().url("$api/files/$fileId?fields=id,version,modifiedTime,size,md5Checksum,appProperties").get(), "metadata").use {
             parseFile(JSONObject(it.body!!.string()))
         }
     }
@@ -57,24 +57,27 @@ class DriveClient(
         }
     }
 
-    suspend fun create(token: String, content: ByteArray, generation: Long): RemoteFile = withContext(Dispatchers.IO) {
+    /**
+     * [extra] app properties travel with the single backup file (private to sBoard's OAuth client);
+     * a null value removes the property.
+     */
+    suspend fun create(token: String, content: ByteArray, generation: Long, extra: Map<String, String?> = emptyMap()): RemoteFile = withContext(Dispatchers.IO) {
         val metadata = JSONObject()
             .put("name", BackupFormat.FILE_NAME)
             .put("parents", org.json.JSONArray().put("appDataFolder"))
             .put("mimeType", MIME)
-            .put("appProperties", JSONObject().put("sboardFormat", BackupFormat.FORMAT_VERSION.toString()).put("generation", generation.toString()))
+            .put("appProperties", properties(generation, extra.filterValues { it != null }))
         val body = multipart(metadata, content)
-        execute(token, Request.Builder().url("$upload/files?uploadType=multipart&fields=id,version,modifiedTime,size,md5Checksum").post(body), "upload").use {
+        execute(token, Request.Builder().url("$upload/files?uploadType=multipart&fields=id,version,modifiedTime,size,md5Checksum,appProperties").post(body), "upload").use {
             parseFile(JSONObject(it.body!!.string()))
         }
     }
 
     /** Replaces the content of the single backup file in place (no new copies are created). */
-    suspend fun update(token: String, fileId: String, content: ByteArray, generation: Long): RemoteFile = withContext(Dispatchers.IO) {
-        val metadata = JSONObject().put("appProperties",
-            JSONObject().put("sboardFormat", BackupFormat.FORMAT_VERSION.toString()).put("generation", generation.toString()))
+    suspend fun update(token: String, fileId: String, content: ByteArray, generation: Long, extra: Map<String, String?> = emptyMap()): RemoteFile = withContext(Dispatchers.IO) {
+        val metadata = JSONObject().put("appProperties", properties(generation, extra))
         val body = multipart(metadata, content)
-        execute(token, Request.Builder().url("$upload/files/$fileId?uploadType=multipart&fields=id,version,modifiedTime,size,md5Checksum").patch(body), "update").use {
+        execute(token, Request.Builder().url("$upload/files/$fileId?uploadType=multipart&fields=id,version,modifiedTime,size,md5Checksum,appProperties").patch(body), "update").use {
             parseFile(JSONObject(it.body!!.string()))
         }
     }
@@ -93,6 +96,12 @@ class DriveClient(
         }.getOrNull()
     }
 
+    private fun properties(generation: Long, extra: Map<String, String?>): JSONObject {
+        val json = JSONObject().put("sboardFormat", BackupFormat.FORMAT_VERSION.toString()).put("generation", generation.toString())
+        extra.forEach { (k, v) -> json.put(k, v ?: JSONObject.NULL) }
+        return json
+    }
+
     private fun multipart(metadata: JSONObject, content: ByteArray) = MultipartBody.Builder()
         .setType("multipart/related".toMediaType())
         .addPart(metadata.toString().toRequestBody("application/json; charset=UTF-8".toMediaType()))
@@ -105,6 +114,7 @@ class DriveClient(
         modifiedTime = json.optString("modifiedTime").takeIf { it.isNotBlank() },
         size = json.optString("size", "0").toLongOrNull() ?: 0L,
         md5 = json.optString("md5Checksum").takeIf { it.isNotBlank() },
+        properties = json.optJSONObject("appProperties")?.let { p -> p.keys().asSequence().associateWith { p.optString(it) } }.orEmpty(),
     )
 
     private fun execute(token: String, builder: Request.Builder, operation: String): Response {

@@ -129,6 +129,36 @@ class SyncEndToEndTest {
         assertEquals(1, engine().restore(engine().inspectCloud(token)!!, VaultKeyManager.formatRecoveryKey(code)))
     }
 
+    @Test fun googleRecoveryOpensVaultWithoutPasswordOrRecoveryKey() = runBlocking {
+        VaultKeyManager(context).createVault(password.toCharArray())
+        VaultRepository.get(context).save(null, login("Shop", "me", "shop-pass-42"))
+        assertTrue(engine().sync(token) is SyncEngine.Outcome.Success)
+        assertFalse(engine().canRecoverWithGoogle(engine().inspectCloud(token)!!))
+        VaultKeyManager(context).enableGoogleRecovery()
+        assertTrue(engine().sync(token) is SyncEngine.Outcome.Success)
+        assertTrue(fake.files.values.single().properties[VaultKeyManager.DRIVE_RECOVERY_PROPERTY]!!.length >= 43)
+
+        // New phone, master password forgotten, no Recovery Key: sign in to Google and recover.
+        simulateNewDevice(context)
+        val cloud = engine().inspectCloud(token)!!
+        assertTrue(engine().canRecoverWithGoogle(cloud))
+        assertEquals(1, engine().restoreWithGoogle(cloud))
+        assertTrue(VaultSessionProvider.session.isUnlocked)
+        // A new master password is set without the old one and works after locking.
+        VaultKeyManager(context).resetMasterPassword("my new memorable phrase".toCharArray())
+        assertTrue(engine().sync(token) is SyncEngine.Outcome.Success)
+        VaultSessionProvider.session.lock()
+        VaultKeyManager(context).unlockWithPassword("my new memorable phrase".toCharArray())
+        assertEquals("shop-pass-42", VaultRepository.get(context).snapshot().single().payload.login!!.password)
+        // Recovery survives the restore (the secret is re-uploaded with the next sync).
+        assertTrue(fake.files.values.single().properties[VaultKeyManager.DRIVE_RECOVERY_PROPERTY] != null)
+
+        // Turning it off removes the secret from Drive.
+        VaultKeyManager(context).disableGoogleRecovery()
+        assertTrue(engine().sync(token) is SyncEngine.Outcome.Success)
+        assertNull(fake.files.values.single().properties[VaultKeyManager.DRIVE_RECOVERY_PROPERTY])
+    }
+
     @Test fun differentVaultIsDetectedAndCanBeJoined() = runBlocking {
         VaultKeyManager(context).createVault(password.toCharArray())
         VaultRepository.get(context).save(null, login("Cloud", "a", "cloud-pass-1"))

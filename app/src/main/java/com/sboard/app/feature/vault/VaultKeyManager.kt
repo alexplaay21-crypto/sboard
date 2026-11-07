@@ -5,6 +5,7 @@ import androidx.room.withTransaction
 import com.sboard.app.core.crypto.AesGcm
 import com.sboard.app.core.crypto.Argon2Kdf
 import com.sboard.app.core.crypto.B64
+import com.sboard.app.core.crypto.Hkdf
 import com.sboard.app.core.crypto.KdfParams
 import com.sboard.app.core.crypto.randomBytes
 import com.sboard.app.core.crypto.toUtf8Bytes
@@ -36,6 +37,8 @@ data class KeyWrap(
     companion object {
         const val PASSWORD = "password"
         const val RECOVERY = "recovery"
+        /** Vault key wrapped by a random 256-bit secret kept with the backup in the user's Google Drive. */
+        const val GOOGLE = "google"
     }
 }
 
@@ -127,6 +130,96 @@ class VaultKeyManager(context: Context, private val session: VaultSession = Vaul
         SyncScheduler.requestSoon(appContext, keyMaterialChanged = true)
     }
 
+    /**
+     * Sets a new master password without the old one. Only possible while the Vault is unlocked
+     * (biometrics, Recovery Key or Google recovery); the UI additionally asks for biometrics or the
+     * screen lock right before calling this.
+     */
+    suspend fun resetMasterPassword(newPassword: CharArray) = withContext(Dispatchers.Default) {
+        try {
+            validateNewPassword(newPassword)
+            session.withKey { vaultKey ->
+                val wrap = wrap(KeyWrap.PASSWORD, newPassword.toUtf8Bytes(), vaultKey, PASSWORD_AAD)
+                database.withTransaction {
+                    config.put(wrap.toConfig())
+                    meta.put(META_KEY_UPDATED, System.currentTimeMillis().toString())
+                }
+            }
+        } finally { newPassword.fill('\u0000') }
+        SyncScheduler.requestSoon(appContext, keyMaterialChanged = true)
+    }
+
+    // ---- Recovery through the Google account -----------------------------------------------------
+
+    suspend fun hasGoogleRecovery(): Boolean = withContext(Dispatchers.IO) { meta.get(META_GOOGLE_WRAP) != null }
+
+    /**
+     * Enables recovery through the Google account: a random 256-bit secret wraps the Vault key. The
+     * wrap goes into the encrypted backup header, the secret into the backup file's private app
+     * properties in Drive — so whoever can sign in to this Google account in sBoard can open the
+     * Vault. Locally the secret is kept only encrypted with the Vault key (to re-upload it).
+     */
+    suspend fun enableGoogleRecovery() = withContext(Dispatchers.Default) {
+        val secret = randomBytes(32)
+        try {
+            session.withKey { vaultKey ->
+                val wrapKey = Hkdf.derive(secret, "sBoard:GoogleRecovery:v1")
+                val sealed = AesGcm.encrypt(wrapKey, vaultKey, GOOGLE_AAD)
+                wrapKey.fill(0)
+                val wrap = KeyWrap(KeyWrap.GOOGLE, "", B64.std(sealed.iv), B64.std(sealed.ciphertext), 0, 0, 0)
+                val local = AesGcm.encrypt(vaultKey, secret, GOOGLE_LOCAL_AAD)
+                database.withTransaction {
+                    meta.put(META_GOOGLE_WRAP, kotlinx.serialization.json.Json.encodeToString(KeyWrap.serializer(), wrap))
+                    meta.put(META_GOOGLE_SECRET, B64.std(local.iv) + ":" + B64.std(local.ciphertext))
+                    meta.put(META_KEY_UPDATED, System.currentTimeMillis().toString())
+                }
+            }
+        } finally { secret.fill(0) }
+        SyncScheduler.requestSoon(appContext, keyMaterialChanged = true)
+    }
+
+    suspend fun disableGoogleRecovery() = withContext(Dispatchers.IO) {
+        database.withTransaction {
+            meta.delete(META_GOOGLE_WRAP)
+            meta.delete(META_GOOGLE_SECRET)
+            meta.put(META_KEY_UPDATED, System.currentTimeMillis().toString())
+        }
+        SyncScheduler.requestSoon(appContext, keyMaterialChanged = true)
+    }
+
+    /** The recovery secret for the Drive app property (needs the unlocked Vault); null when disabled. */
+    suspend fun googleRecoverySecret(): String? = withContext(Dispatchers.Default) {
+        val stored = meta.get(META_GOOGLE_SECRET) ?: return@withContext null
+        val (iv, ct) = stored.split(':').takeIf { it.size == 2 } ?: return@withContext null
+        runCatching {
+            session.withKey { key ->
+                val raw = AesGcm.decrypt(key, B64.fromStd(iv), B64.fromStd(ct), GOOGLE_LOCAL_AAD)
+                try { B64.url(raw) } finally { raw.fill(0) }
+            }
+        }.getOrNull()
+    }
+
+    /** Keeps the recovery secret (read from Drive) locally, encrypted with the Vault key. */
+    suspend fun storeGoogleSecret(secret: String) = withContext(Dispatchers.Default) {
+        val raw = runCatching { B64.fromUrl(secret) }.getOrNull()?.takeIf { it.size == 32 } ?: return@withContext
+        try {
+            val stored = session.withKey { key -> AesGcm.encrypt(key, raw, GOOGLE_LOCAL_AAD) }
+            meta.put(META_GOOGLE_SECRET, B64.std(stored.iv) + ":" + B64.std(stored.ciphertext))
+        } finally { raw.fill(0) }
+    }
+
+    /** Opens a cloud Vault key with the recovery secret from Google Drive. */
+    fun unwrapGoogleKey(wraps: List<KeyWrap>, secret: String): ByteArray {
+        val wrap = wraps.firstOrNull { it.kind == KeyWrap.GOOGLE } ?: throw WrongSecretException(tr("Восстановление через Google не было включено"))
+        val raw = runCatching { B64.fromUrl(secret) }.getOrNull()?.takeIf { it.size == 32 } ?: throw WrongSecretException(tr("Ключ восстановления в Google Drive повреждён"))
+        val wrapKey = Hkdf.derive(raw, "sBoard:GoogleRecovery:v1")
+        raw.fill(0)
+        return try {
+            runCatching { AesGcm.decrypt(wrapKey, B64.fromStd(wrap.iv), B64.fromStd(wrap.ct), GOOGLE_AAD) }.getOrNull()?.takeIf { it.size == 32 }
+                ?: throw WrongSecretException(tr("Ключ восстановления в Google Drive не подходит"))
+        } finally { wrapKey.fill(0) }
+    }
+
     /** Generates a new 256-bit Recovery Key, replacing any previous one. Shown to the user once. */
     suspend fun createRecoveryKey(): String = withContext(Dispatchers.Default) {
         val raw = randomBytes(32)
@@ -155,7 +248,8 @@ class VaultKeyManager(context: Context, private val session: VaultSession = Vaul
     // ---- Sync / restore support -------------------------------------------------------------
 
     suspend fun exportWraps(): List<KeyWrap> = withContext(Dispatchers.IO) {
-        listOfNotNull(config.get()?.toWrap(), recovery.get()?.toWrap())
+        val google = meta.get(META_GOOGLE_WRAP)?.let { runCatching { kotlinx.serialization.json.Json.decodeFromString(KeyWrap.serializer(), it) }.getOrNull() }
+        listOfNotNull(config.get()?.toWrap(), recovery.get()?.toWrap(), google)
     }
 
     /** Unwraps a cloud key using the password or Recovery Key the user typed on this device. */
@@ -174,6 +268,9 @@ class VaultKeyManager(context: Context, private val session: VaultSession = Vaul
         database.withTransaction {
             config.put(password.toConfig())
             if (rec != null) recovery.put(rec.toRecovery()) else recovery.delete()
+            val google = wraps.firstOrNull { it.kind == KeyWrap.GOOGLE }
+            if (google != null) meta.put(META_GOOGLE_WRAP, kotlinx.serialization.json.Json.encodeToString(KeyWrap.serializer(), google))
+            else { meta.delete(META_GOOGLE_WRAP); meta.delete(META_GOOGLE_SECRET) }
             meta.put(META_VAULT_ID, vaultId)
             meta.put(META_KEY_UPDATED, keyUpdatedAt.toString())
         }
@@ -226,6 +323,12 @@ class VaultKeyManager(context: Context, private val session: VaultSession = Vaul
         const val META_KEY_UPDATED = "key_updated_at"
         private val PASSWORD_AAD = "sBoard:VaultKey:v1".toByteArray(Charsets.UTF_8)
         private val RECOVERY_AAD = "sBoard:RecoveryEnvelope:v1".toByteArray(Charsets.UTF_8)
+        private val GOOGLE_AAD = "sBoard:GoogleRecovery:v1".toByteArray(Charsets.UTF_8)
+        private val GOOGLE_LOCAL_AAD = "sBoard:GoogleRecoveryLocal:v1".toByteArray(Charsets.UTF_8)
+        const val META_GOOGLE_WRAP = "google_recovery_wrap"
+        const val META_GOOGLE_SECRET = "google_recovery_secret"
+        /** Drive app property holding the Google recovery secret. */
+        const val DRIVE_RECOVERY_PROPERTY = "sboardRecovery"
 
         fun normalizeRecoveryKey(input: String): String {
             val compact = input.filterNot { it.isWhitespace() }

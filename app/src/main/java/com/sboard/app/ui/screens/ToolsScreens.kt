@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
@@ -216,16 +217,49 @@ fun TranslatorScreen(nav: Navigator) {
         }
     }
     pickFor?.let { target ->
-        AlertDialog(onDismissRequest = { pickFor = null }, containerColor = palette.surface, title = { Text(tr("Язык")) },
-            text = {
-                androidx.compose.foundation.lazy.LazyColumn {
-                    items(names.entries.filter { target == "from" || it.key != Translator.AUTO }.toList()) { (code, label) ->
-                        Text(label, Modifier.fillMaxWidth().clickable { if (target == "from") from = code else to = code; pickFor = null }.padding(vertical = 12.dp),
-                            color = if ((target == "from" && from == code) || (target == "to" && to == code)) palette.accent else palette.text)
-                    }
-                }
-            }, confirmButton = {})
+        TranslatorLanguageDialog(includeAuto = target == "from", selected = if (target == "from") from else to,
+            onPick = { code -> if (target == "from") from = code else to = code; Translator.rememberRecent(context, code); pickFor = null },
+            onDismiss = { pickFor = null })
     }
+}
+
+/** Searchable language list with recently used languages on top. */
+@Composable
+fun TranslatorLanguageDialog(includeAuto: Boolean, selected: String, onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    var query by remember { mutableStateOf("") }
+    val recent = remember { Translator.recent(context) }
+    val all = Translator.languages
+    val filtered = all.filter { query.isBlank() || it.name.contains(query, true) || Translator.nativeName(it.code).contains(query, true) || it.code.startsWith(query, true) }
+    AlertDialog(onDismissRequest = onDismiss, containerColor = palette.surface, title = { Text(tr("Язык")) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SBTextField(query, { query = it }, tr("Поиск языка"))
+                androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 420.dp)) {
+                    @Composable fun LangRow(code: String, label: String) {
+                        val active = code == selected
+                        Row(Modifier.fillMaxWidth().then(Modifier.clip(com.sboard.app.ui.theme.SBoardShapes.medium)).clickable { onPick(code) }.padding(vertical = 11.dp, horizontal = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(label, color = if (active) palette.accent else palette.text, style = MaterialTheme.typography.bodyLarge)
+                                if (code != Translator.AUTO) Text(Translator.nativeName(code), color = palette.textFaint, style = MaterialTheme.typography.bodySmall)
+                            }
+                            if (active) Icon(Icons.Rounded.Check, null, tint = palette.accent)
+                        }
+                    }
+                    if (query.isBlank()) {
+                        if (includeAuto) item { LangRow(Translator.AUTO, tr("Определить язык")) }
+                        val recentLangs = recent.mapNotNull { code -> all.firstOrNull { it.code == code } }
+                        if (recentLangs.isNotEmpty()) {
+                            item { Text(tr("Недавние"), style = MaterialTheme.typography.labelMedium, color = palette.textMuted, modifier = Modifier.padding(top = 6.dp)) }
+                            items(recentLangs, key = { "r" + it.code }) { LangRow(it.code, it.name) }
+                            item { Text(tr("Все языки"), style = MaterialTheme.typography.labelMedium, color = palette.textMuted, modifier = Modifier.padding(top = 6.dp)) }
+                        }
+                    }
+                    items(filtered, key = { it.code }) { LangRow(it.code, it.name) }
+                }
+            }
+        }, confirmButton = { TextButton(onClick = onDismiss) { Text(tr("Закрыть"), color = palette.textMuted) } })
 }
 
 @Composable

@@ -82,22 +82,22 @@ object FieldParser {
     )
 
     private val keywordRules: List<Pair<FieldKind, List<String>>> = listOf(
-        FieldKind.OTP to listOf("otp", "one-time", "onetime", "verification code", "2fa", "totp", "auth code", "код подтверждения", "одноразов", "код из", "sms code", "смс"),
-        FieldKind.CARD_CVC to listOf("cvv", "cvc", "csc", "security code", "код безопасности"),
-        FieldKind.CARD_NUMBER to listOf("card number", "cardnumber", "cc-number", "ccnumber", "номер карты"),
-        FieldKind.CARD_EXP_DATE to listOf("expiry", "expiration", "exp date", "mm/yy", "срок действия"),
-        FieldKind.CARD_HOLDER to listOf("cardholder", "name on card", "владелец карты"),
-        FieldKind.NEW_PASSWORD to listOf("new password", "newpassword", "new_password", "новый пароль", "confirm password", "повторите пароль"),
-        FieldKind.PASSWORD to listOf("password", "passwd", "пароль", "pin"),
-        FieldKind.EMAIL to listOf("email", "e-mail", "почта", "mail"),
-        FieldKind.USERNAME to listOf("username", "user name", "login", "логин", "user_id", "userid", "account", "имя пользователя", "учетн", "учётн"),
-        FieldKind.PHONE to listOf("phone", "mobile", "телефон", "tel"),
-        FieldKind.FAMILY_NAME to listOf("last name", "lastname", "surname", "family name", "фамилия"),
-        FieldKind.GIVEN_NAME to listOf("first name", "firstname", "given name", "имя"),
-        FieldKind.POSTAL_CODE to listOf("zip", "postal", "postcode", "индекс"),
-        FieldKind.CITY to listOf("city", "town", "город"),
-        FieldKind.ADDRESS to listOf("address", "street", "адрес", "улица"),
-        FieldKind.COUNTRY to listOf("country", "страна"),
+        FieldKind.OTP to listOf("otp", "one-time", "onetime", "verification code", "2fa", "totp", "auth code", "код подтверждения", "одноразов", "код из", "sms code", "смс", "código de verificación", "code de vérification", "bestätigungscode", "codice di verifica", "código de verificação", "kod weryfikacyjny", "код підтвердження", "doğrulama kodu", "验证码", "認証コード", "인증번호", "رمز التحقق", "sms-code"),
+        FieldKind.CARD_CVC to listOf("cvv", "cvc", "csc", "security code", "код безопасности", "cvv2", "cvc2", "prüfnummer", "código de seguridad", "cryptogramme", "código de segurança", "kod cvv"),
+        FieldKind.CARD_NUMBER to listOf("card number", "cardnumber", "cc-number", "ccnumber", "номер карты", "número de tarjeta", "numéro de carte", "kartennummer", "numero carta", "número do cartão", "numer karty", "номер картки", "kart numarası", "卡号", "カード番号", "카드번호", "رقم البطاقة"),
+        FieldKind.CARD_EXP_DATE to listOf("expiry", "expiration", "exp date", "mm/yy", "срок действия", "fecha de caducidad", "date d'expiration", "gültig bis", "ablaufdatum", "scadenza", "validade", "data ważności", "термін дії", "son kullanma", "有效期", "有効期限", "유효기간"),
+        FieldKind.CARD_HOLDER to listOf("cardholder", "name on card", "владелец карты", "titular", "titulaire", "karteninhaber", "intestatario", "posiadacz karty", "власник картки", "kart sahibi", "持卡人"),
+        FieldKind.NEW_PASSWORD to listOf("new password", "newpassword", "new_password", "новый пароль", "confirm password", "повторите пароль", "nueva contraseña", "nouveau mot de passe", "neues passwort", "nuova password", "nova senha", "nowe hasło", "новий пароль", "yeni şifre", "新密码", "新しいパスワード", "새 비밀번호", "confirmar contraseña", "confirmer le mot de passe", "passwort bestätigen", "повторіть пароль"),
+        FieldKind.PASSWORD to listOf("password", "passwd", "пароль", "pin", "contraseña", "mot de passe", "passwort", "kennwort", "senha", "hasło", "haslo", "şifre", "parola", "wachtwoord", "lösenord", "adgangskode", "salasana", "heslo", "jelszó", "κωδικός", "密码", "密碼", "パスワード", "비밀번호", "كلمة المرور", "סיסמה", "पासवर्ड", "mật khẩu", "kata sandi", "құпия сөз", "parol", "гасло"),
+        FieldKind.EMAIL to listOf("email", "e-mail", "почта", "mail", "correo", "courriel", "e-mail-adresse", "posta elettronica", "poczta", "пошта", "e-posta", "邮箱", "メール", "이메일", "البريد"),
+        FieldKind.USERNAME to listOf("username", "user name", "login", "логин", "user_id", "userid", "account", "имя пользователя", "учетн", "учётн", "usuario", "nombre de usuario", "identifiant", "nom d'utilisateur", "benutzername", "benutzer", "anmeldename", "utente", "nome utente", "usuário", "użytkownik", "логін", "користувач", "kullanıcı adı", "gebruikersnaam", "användarnamn", "käyttäjätunnus", "用户名", "帳號", "ユーザー名", "아이디", "사용자", "اسم المستخدم", "שם משתמש", "tên đăng nhập", "nama pengguna", "пайдаланушы"),
+        FieldKind.PHONE to listOf("phone", "mobile", "телефон", "tel", "teléfono", "téléphone", "telefon", "telefono", "telefone", "номер телефону", "telefon numarası", "电话", "手机", "電話", "전화", "هاتف", "celular", "móvil", "handy"),
+        FieldKind.FAMILY_NAME to listOf("last name", "lastname", "surname", "family name", "фамилия", "apellido", "nom de famille", "nachname", "cognome", "sobrenome", "nazwisko", "прізвище", "soyad", "achternaam", "efternamn"),
+        FieldKind.GIVEN_NAME to listOf("first name", "firstname", "given name", "имя", "nombre", "prénom", "vorname", "nome", "imię", "ім'я", "voornaam", "förnamn"),
+        FieldKind.POSTAL_CODE to listOf("zip", "postal", "postcode", "индекс", "código postal", "code postal", "postleitzahl", "plz", "cep", "kod pocztowy", "поштовий індекс", "posta kodu", "邮编", "郵便番号", "우편번호"),
+        FieldKind.CITY to listOf("city", "town", "город", "ciudad", "ville", "stadt", "città", "cidade", "miasto", "місто", "şehir", "城市", "市区町村", "도시"),
+        FieldKind.ADDRESS to listOf("address", "street", "адрес", "улица", "dirección", "adresse", "straße", "strasse", "indirizzo", "endereço", "adres", "ulica", "адреса", "вулиця", "地址", "住所", "주소", "العنوان"),
+        FieldKind.COUNTRY to listOf("country", "страна", "país", "pays", "paese", "kraj", "країна", "ülke", "国家", "국가"),
     )
 
     private fun isPlainText(node: AssistStructure.ViewNode): Boolean {
@@ -148,8 +148,9 @@ object FieldParser {
         if (cls == InputType.TYPE_CLASS_PHONE) return FieldKind.PHONE
         if (text.isBlank()) return null
         // Custom password views that do not declare a password input type.
-        val passwordWords = listOf("password", "passwd", "pwd", "пароль", "passcode", "парол")
-        if (passwordWords.any { text.contains(it) } && listOf("forgot", "забыли", "reset", "восстанов", "confirm").none { text.contains(it) } &&
+        val passwordWords = listOf("password", "passwd", "pwd", "пароль", "passcode", "парол", "contraseña", "mot de passe", "passwort",
+            "kennwort", "senha", "hasło", "şifre", "parola", "wachtwoord", "lösenord", "密码", "パスワード", "비밀번호", "كلمة المرور", "гасло")
+        if (passwordWords.any { text.contains(it) } && listOf("forgot", "забыли", "reset", "восстанов", "confirm", "olvid", "oublié", "vergessen", "esqueceu", "dimenticat").none { text.contains(it) } &&
             cls == InputType.TYPE_CLASS_TEXT) return FieldKind.PASSWORD
         for ((kind, words) in keywordRules) {
             if (kind == FieldKind.PASSWORD || kind == FieldKind.NEW_PASSWORD) continue // only on real password inputs

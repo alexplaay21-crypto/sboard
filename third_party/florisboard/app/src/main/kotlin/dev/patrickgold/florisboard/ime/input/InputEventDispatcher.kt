@@ -121,7 +121,8 @@ class InputEventDispatcher private constructor(private val repeatableKeyCodes: I
                                 pressedKeyInfo.blockUp = true
                             }
                             val nextDelay = if (isDeleteKey) {
-                                DeleteRepeatSchedule.interval(repeatDelay, SystemClock.uptimeMillis() - repeatStartedAt)
+                                // sBoard: user-adjustable backspace speed.
+                                DeleteRepeatSchedule.interval(repeatDelay * 100L / org.sboard.keyboard.SBoardTypingPrefs.backspaceSpeed.coerceIn(50, 200), SystemClock.uptimeMillis() - repeatStartedAt)
                             } else {
                                 repeatDelay
                             }

@@ -15,7 +15,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.automirrored.filled.KeyboardReturn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -63,10 +63,12 @@ private fun fieldText(): String? {
 @Composable
 fun TranslateBar() {
     val translator = SBoardVaultBridge.translator ?: return
+    // The source language is always detected automatically (the keyboard language already says
+    // what the user types); only the target language is chosen.
     val initial = remember { translator.loadPair() }
-    var from by remember { mutableStateOf(initial.first) }
-    var to by remember { mutableStateOf(initial.second) }
-    var picking by remember { mutableStateOf<String?>(null) }
+    val from = "auto"
+    var to by remember { mutableStateOf(initial.second.takeIf { it != "auto" } ?: "en") }
+    var picking by remember { mutableStateOf(false) }
     var source by remember { mutableStateOf("") }
     var result by remember { mutableStateOf("") }
     var status by remember { mutableStateOf(translator.text("translate_hint")) }
@@ -101,18 +103,15 @@ fun TranslateBar() {
         ic.endBatchEdit()
         applied = result; source = result; result = ""
     }
-    fun name(code: String) = if (code == "auto") translator.languages.first().second else code.substringBefore('-').uppercase()
+    fun name(code: String) = translator.languages.firstOrNull { it.first == code }?.second ?: code.substringBefore('-').uppercase()
 
     Column(Modifier.fillMaxWidth()) {
         SnyggRow(FlorisImeUi.ClipboardHeader.elementName,
             modifier = Modifier.fillMaxWidth().heightIn(min = FlorisImeSizing.smartbarHeight),
             verticalAlignment = Alignment.CenterVertically) {
             val size = Modifier.sizeIn(maxHeight = FlorisImeSizing.smartbarHeight).aspectRatio(1f)
-            SnyggChip(FlorisImeUi.ClipboardFilterChip.elementName, onClick = { picking = if (picking == "from") null else "from" }, text = name(from))
-            SnyggIconButton(FlorisImeUi.ClipboardHeaderButton.elementName, modifier = size, onClick = {
-                if (from != "auto") { val f = from; from = to; to = f; translator.savePair(from, to) }
-            }) { SnyggIcon(imageVector = Icons.Default.SwapHoriz) }
-            SnyggChip(FlorisImeUi.ClipboardFilterChip.elementName, onClick = { picking = if (picking == "to") null else "to" }, text = name(to))
+            SnyggIcon(imageVector = Icons.Default.Translate, modifier = Modifier.padding(start = 10.dp, end = 4.dp))
+            SnyggChip(FlorisImeUi.ClipboardFilterChip.elementName, onClick = { picking = !picking }, text = "→ " + name(to))
             SnyggText(FlorisImeUi.ClipboardHeaderText.elementName,
                 modifier = Modifier.weight(1f).padding(horizontal = 6.dp).clickable { apply() },
                 text = result.ifBlank { status })
@@ -125,16 +124,12 @@ fun TranslateBar() {
                 SnyggIcon(imageVector = Icons.Default.Close)
             }
         }
-        val target = picking
-        if (target != null) {
+        if (picking) {
             LazyRow(Modifier.fillMaxWidth().height(FlorisImeSizing.smartbarHeight), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                items(translator.languages.filter { target == "from" || it.first != "auto" }, key = { it.first }) { (code, label) ->
+                items(translator.languages.filter { it.first != "auto" }, key = { it.first }) { (code, label) ->
                     SnyggChip(FlorisImeUi.ClipboardFilterChip.elementName,
-                        attributes = mapOf("state" to if ((target == "from" && code == from) || (target == "to" && code == to)) "active" else "inactive"),
-                        onClick = {
-                            if (target == "from") from = code else to = code
-                            translator.savePair(from, to); picking = null
-                        }, text = label)
+                        attributes = mapOf("state" to if (code == to) "active" else "inactive"),
+                        onClick = { to = code; translator.savePair(from, to); picking = false }, text = label)
                 }
             }
         }

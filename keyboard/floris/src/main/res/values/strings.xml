@@ -4,4 +4,6 @@
     <string name="quick_action__ime_ui_mode_vault__tooltip">Вставить данные из хранилища sBoard</string>
     <string name="quick_action__ime_ui_mode_translate">Переводчик</string>
     <string name="quick_action__ime_ui_mode_translate__tooltip">Перевести текст в поле</string>
+    <string name="quick_action__ime_ui_mode_editing">Редактирование</string>
+    <string name="quick_action__ime_ui_mode_editing__tooltip">Курсор, выделение, копирование и вставка</string>
 </resources>

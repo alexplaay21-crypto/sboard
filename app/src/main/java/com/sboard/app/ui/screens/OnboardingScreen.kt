@@ -101,8 +101,12 @@ private fun WelcomeStep(onCreate: () -> Unit, onRestore: () -> Unit) {
             }
         }
         Spacer(Modifier.weight(1f))
-        SegmentedControl(listOf(SBoardI18n.MODE_SYSTEM to tr("Системный"), SBoardI18n.MODE_RU to "Русский", SBoardI18n.MODE_EN to "English"),
-            SBoardI18n.currentMode(), { SBoardI18n.setLanguage(context, it) })
+        var pickLanguage by remember { mutableStateOf(false) }
+        SecondaryButton(languageLabel(SBoardI18n.currentMode()), { pickLanguage = true }, icon = Icons.Rounded.Translate)
+        if (pickLanguage) androidx.compose.material3.AlertDialog(onDismissRequest = { pickLanguage = false }, containerColor = palette.surface,
+            title = { Text(tr("Язык интерфейса")) },
+            text = { Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState())) { AppLanguageList(onPicked = { pickLanguage = false }) } },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = { pickLanguage = false }) { Text(tr("Закрыть"), color = palette.textMuted) } })
         PrimaryButton(tr("Создать хранилище"), onCreate, icon = Icons.Rounded.Add)
         SecondaryButton(tr("Восстановить из Google Drive"), onRestore, icon = Icons.Rounded.CloudDownload)
     }
@@ -200,6 +204,8 @@ private fun RestoreStep(onBack: () -> Unit, onRestored: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var secret by remember { mutableStateOf("") }
     var searched by remember { mutableStateOf(false) }
+    var askNewPassword by remember { mutableStateOf(false) }
+    if (askNewPassword) NewMasterPasswordDialog(mandatory = true) { askNewPassword = false; onRestored() }
 
     val authorize = rememberGoogleAuthorizer(onToken = { t ->
         token = t
@@ -253,6 +259,21 @@ private fun RestoreStep(onBack: () -> Unit, onRestored: () -> Unit) {
                         busy = false
                     }
                 }, enabled = secret.isNotEmpty(), loading = busy, icon = Icons.Rounded.Restore)
+                if (engine.canRecoverWithGoogle(c)) {
+                    SecondaryButton(tr("Не помню пароль — восстановить через Google"), {
+                        scope.launch {
+                            busy = true; error = null
+                            try {
+                                val count = engine.restoreWithGoogle(c)
+                                GoogleAccount.markConnected(context, GoogleAccount.account.value?.email.orEmpty(), GoogleAccount.account.value?.name.orEmpty())
+                                SyncScheduler.ensurePeriodic(context)
+                                message = tr("Восстановлено записей: {0}", count)
+                                askNewPassword = true
+                            } catch (e: Exception) { error = e.message ?: tr("Не удалось восстановить через Google") }
+                            busy = false
+                        }
+                    }, icon = Icons.Rounded.CloudSync, enabled = !busy)
+                }
                 Text(tr("Ключ расшифровывается только на этом устройстве. Google не получает мастер-пароль."),
                     style = MaterialTheme.typography.bodySmall, color = palette.textFaint)
             }
